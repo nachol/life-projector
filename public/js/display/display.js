@@ -201,7 +201,8 @@ function frame(now) {
   if (state.output.showFps) $('fps').textContent = `${Math.round(renderer.fps)} fps · ${Math.round(renderer.effectiveScale * 100)}%`;
   if (now - statsAt > 2000) {
     statsAt = now;
-    conn.send({ t: 'stats', fps: renderer.fps, w: canvas.width, h: canvas.height, renderScale: renderer.effectiveScale });
+    const shaderErrors = [...renderer.customErrors].map(([id, v]) => ({ id, name: v.name, errors: v.errors.slice(0, 5) }));
+    conn.send({ t: 'stats', fps: renderer.fps, w: canvas.width, h: canvas.height, renderScale: renderer.effectiveScale, shaderErrors });
   }
   requestAnimationFrame(frame);
 }

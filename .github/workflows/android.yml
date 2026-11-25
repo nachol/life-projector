@@ -2,8 +2,12 @@ name: Android TV app
 
 on:
   push:
-    paths: ["android-tv/**", ".github/workflows/android.yml"]
+    # Declaring only `tags` would silently skip branch pushes, so list both.
+    branches: ["**"]
     tags: ["v*"]
+    paths: ["android-tv/**", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["android-tv/**", ".github/workflows/android.yml"]
   workflow_dispatch:
 
 permissions:
@@ -21,7 +25,8 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      # The ubuntu-latest image already ships the Android SDK (ANDROID_HOME); the Android
+      # Gradle plugin downloads the exact platform / build-tools it needs.
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"

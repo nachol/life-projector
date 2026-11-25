@@ -54,3 +54,30 @@ export function generateThumbs() {
   const idle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 500 }) : setTimeout(fn, 30));
   setTimeout(next, 200);
 }
+
+/** Render a one-off thumbnail for a user-written effect. Returns a JPEG data URL or null. */
+export function renderCustomThumb(custom, colors) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 240; canvas.height = 150;
+  canvas.style.cssText = 'position:fixed;left:-9999px;top:0;width:240px;height:150px;';
+  document.body.append(canvas);
+  let r;
+  try {
+    r = new Renderer(canvas, { preview: true, transitions: false, preserveDrawingBuffer: true, maxSize: 240 });
+    const st = defaultState();
+    st.output.autoQuality = false;
+    const s = st.surfaces[0];
+    s.effect = 'custom';
+    s.custom = custom;
+    s.params = { ...defaultEffectParams('aurora'), ...(colors ? { colors } : {}) };
+    r.setState(st);
+    r.render(1 / 30);
+    r.render(1 / 30);
+    return r.customErrors.size ? null : canvas.toDataURL('image/jpeg', 0.8);
+  } catch {
+    return null;
+  } finally {
+    r?.dispose();
+    canvas.remove();
+  }
+}

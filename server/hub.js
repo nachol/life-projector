@@ -143,7 +143,11 @@ export class Hub {
         break;
       }
       case 'stats': {
-        const live = { fps: Math.round(msg.fps || 0), w: msg.w, h: msg.h, renderScale: msg.renderScale };
+        const shaderErrors = Array.isArray(msg.shaderErrors) ? msg.shaderErrors.slice(0, 10).map((e) => ({
+          id: String(e?.id || '').slice(0, 80), name: String(e?.name || '').slice(0, 60),
+          errors: (Array.isArray(e?.errors) ? e.errors : []).slice(0, 5).map((x) => ({ line: Number.isInteger(x?.line) ? x.line : null, message: String(x?.message || '').slice(0, 300) })),
+        })) : [];
+        const live = { fps: Math.round(msg.fps || 0), w: msg.w, h: msg.h, renderScale: msg.renderScale, shaderErrors };
         this.live.set(id, live);
         this.toControllers({ t: 'stats', displayId: id, ...live });
         break;

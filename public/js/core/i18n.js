@@ -31,6 +31,11 @@ const DICT = {
     nudge: 'Ajuste fino', selected_point: 'Punto seleccionado', share: 'Compartir', install: 'Instalar app',
     language: 'Idioma', layers: 'Capas', all: 'Todos', ambient: 'Ambiente', nature: 'Naturaleza', party: 'Fiesta', geometric: 'Geométricos', utility: 'Utilidades',
     connecting: 'Conectando…', fps: 'FPS',
+    create: 'Crear', my_effects: 'Mis efectos', new_effect: 'Nuevo', template: 'Plantilla', effect_name: 'Nombre del efecto',
+    target_surface: 'Probar en', live_to_display: 'En vivo en la pantalla', compiles: 'Compila correctamente',
+    save_library: 'Guardar en mis efectos', export: 'Exportar', import: 'Importar', apply: 'Aplicar', edit: 'Editar',
+    line: 'Línea', display_error: 'La pantalla no pudo compilar', editor_help: 'Referencia rápida',
+    import_invalid: 'Archivo no válido', effect_saved: 'Efecto guardado',
   },
   en: {
     app_tagline: 'Projection mapping & ambient visuals',
@@ -64,6 +69,11 @@ const DICT = {
     nudge: 'Fine adjust', selected_point: 'Selected point', share: 'Share', install: 'Install app',
     language: 'Language', layers: 'Layers', all: 'All', ambient: 'Ambient', nature: 'Nature', party: 'Party', geometric: 'Geometric', utility: 'Utilities',
     connecting: 'Connecting…', fps: 'FPS',
+    create: 'Create', my_effects: 'My effects', new_effect: 'New', template: 'Template', effect_name: 'Effect name',
+    target_surface: 'Preview on', live_to_display: 'Live on display', compiles: 'Compiles OK',
+    save_library: 'Save to my effects', export: 'Export', import: 'Import', apply: 'Apply', edit: 'Edit',
+    line: 'Line', display_error: 'The display could not compile', editor_help: 'Quick reference',
+    import_invalid: 'Invalid file', effect_saved: 'Effect saved',
   },
 };
 

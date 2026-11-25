@@ -241,6 +241,9 @@ export function applyScene(state, sceneDef, mode = 'content') {
     if (!src) return surf;
     const merged = { ...surf };
     for (const k of CONTENT_KEYS) if (src[k] !== undefined) merged[k] = structuredClone(src[k]);
+    // A custom shader travels with the surface; drop a stale one when the scene uses a built-in effect.
+    if (src.effect === 'custom' && src.custom) merged.custom = structuredClone(src.custom);
+    else delete merged.custom;
     return merged;
   });
   if (srcSurfaces.length > 1) {
@@ -287,4 +290,75 @@ export function normalizeState(s) {
   }) : base.surfaces;
   out.masks = Array.isArray(s.masks) ? s.masks : [];
   return out;
+}
+
+// ---------- Custom (user-written) effects ----------
+export const CUSTOM_GLSL_MAX = 32 * 1024;
+
+export const EFFECT_TEMPLATES = {
+  basic: {
+    name: { es: 'Básico: degradado animado', en: 'Basic: animated gradient' },
+    glsl: `// uv: 0..1   p: centrado (-aspecto..aspecto, -1..1)   t: tiempo
+// uP1, uP2: sliders 0..1   pal(x): paleta de 3 colores   bass(): audio
+vec3 effect(vec2 uv, vec2 p, float t) {
+  float v = sin(p.x * 3. + t) * 0.5 + 0.5;
+  return pal(v * 0.5 + uv.y * uP1 + t * 0.05) * (0.6 + 0.4 * v);
+}
+`,
+  },
+  rings: {
+    name: { es: 'Anillos que laten con el audio', en: 'Rings pulsing with audio' },
+    glsl: `vec3 effect(vec2 uv, vec2 p, float t) {
+  float r = length(p);
+  float w = sin(r * (6. + uP1 * 20.) - t * 3.) * 0.5 + 0.5;
+  w = pow(w, 2. + uP2 * 6.);
+  return pal(r * 0.3 - t * 0.05) * w * (1. + bass());
+}
+`,
+  },
+  flow: {
+    name: { es: 'Ruido fluido (fbm)', en: 'Flowing noise (fbm)' },
+    glsl: `vec3 effect(vec2 uv, vec2 p, float t) {
+  vec2 q = vec2(fbm(p + t * 0.1), fbm(p - t * 0.07 + 4.2));
+  float f = fbm(p * 1.5 + q * (1. + uP1 * 3.));
+  return pal(f + t * 0.02) * (0.3 + f * 1.4);
+}
+`,
+  },
+  stars: {
+    name: { es: 'Cielo de estrellas', en: 'Starry sky' },
+    glsl: `vec3 effect(vec2 uv, vec2 p, float t) {
+  vec3 col = mix(uC1 * 0.1, vec3(0.), uv.y);
+  vec2 g = p * (8. + uP1 * 30.);
+  vec2 id = floor(g);
+  float h = hash21(id);
+  float d = length(fract(g) - hash22(id));
+  float twinkle = 0.5 + 0.5 * sin(t * 3. + h * 40.);
+  col += pal(h) * step(0.85 - uP2 * 0.3, h) * 0.02 / max(d * d, 0.0005) * twinkle * 0.05;
+  return col;
+}
+`,
+  },
+};
+
+/** Validate/normalise a custom effect definition (from the editor, server or an imported file). */
+export function sanitizeCustomEffect(e) {
+  if (!e || typeof e !== 'object') return null;
+  const glsl = typeof e.glsl === 'string' ? e.glsl : '';
+  if (!glsl.trim() || glsl.length > CUSTOM_GLSL_MAX) return null;
+  const str = (v, max, d = '') => (typeof v === 'string' ? v.slice(0, max) : d);
+  return {
+    id: /^[a-zA-Z0-9_-]{1,80}$/.test(e.id || '') ? e.id : uid('fx'),
+    name: str(e.name, 60, 'Mi efecto').trim() || 'Mi efecto',
+    glsl,
+    p1Label: str(e.p1Label, 30, 'P1'),
+    p2Label: str(e.p2Label, 30, 'P2'),
+    author: str(e.author, 60),
+    colors: Array.isArray(e.colors) && e.colors.length === 3 && e.colors.every((c) => /^#[0-9a-fA-F]{6}$/.test(c)) ? [...e.colors] : null,
+  };
+}
+
+/** The part of a custom effect that is embedded in a surface (no thumbnail, no metadata). */
+export function customForSurface(e) {
+  return { id: e.id, name: e.name, glsl: e.glsl, p1Label: e.p1Label, p2Label: e.p2Label };
 }
