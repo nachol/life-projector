@@ -1,0 +1,9 @@
+# Linux only: host networking so the server is auto-discovered (mDNS/Bonjour)
+# by the Android TV app and other devices.
+#   docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
+services:
+  life-projector:
+    network_mode: host
+    ports: !reset []
+    environment:
+      MDNS: "true"

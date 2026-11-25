@@ -1,0 +1,34 @@
+{
+  "name": "life-projector",
+  "version": "0.1.0",
+  "description": "Open source web app for projection mapping and ambient visuals: GPU particles, shader effects, mapping surfaces, protection masks and projector optics. Cast to any browser, projector or Google TV on your network.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "keywords": [
+    "projection-mapping",
+    "projector",
+    "webgl",
+    "particles",
+    "shaders",
+    "vj",
+    "ambient",
+    "google-tv",
+    "chromecast"
+  ],
+  "dependencies": {
+    "bonjour-service": "^1.4.4",
+    "express": "^5.3.0",
+    "qrcode": "^1.5.4",
+    "selfsigned": "^5.5.0",
+    "ws": "^8.23.0"
+  }
+}

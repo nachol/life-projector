@@ -1,0 +1,9 @@
+node_modules/
+data/
+*.log
+.DS_Store
+android-tv/.gradle/
+android-tv/build/
+android-tv/app/build/
+android-tv/local.properties
+android-tv/*.keystore

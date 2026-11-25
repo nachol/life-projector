@@ -1,0 +1,8 @@
+node_modules
+data
+.git
+android-tv
+docs
+test
+*.md
+!README.md

@@ -1,0 +1,290 @@
+// Catalog of effects, particle systems and palettes (metadata only, no GLSL).
+// Shared by the controller UI, the display engine and the Node server.
+
+export const PALETTES = {
+  aurora:    { name: { es: 'Aurora boreal', en: 'Northern lights' }, colors: ['#00ffa3', '#00b3ff', '#7a2bff'] },
+  sunset:    { name: { es: 'Atardecer', en: 'Sunset' }, colors: ['#ff4e50', '#f9d423', '#8e2de2'] },
+  ocean:     { name: { es: 'Océano', en: 'Ocean' }, colors: ['#001f54', '#0a9396', '#94d2bd'] },
+  fire:      { name: { es: 'Fuego', en: 'Fire' }, colors: ['#5c0a00', '#ff5a00', '#ffe08a'] },
+  forest:    { name: { es: 'Bosque', en: 'Forest' }, colors: ['#0b3d20', '#5bd16b', '#e8f77a'] },
+  neon:      { name: { es: 'Neón', en: 'Neon' }, colors: ['#ff00c8', '#00f0ff', '#faff00'] },
+  cyberpunk: { name: { es: 'Cyberpunk', en: 'Cyberpunk' }, colors: ['#2b0057', '#ff2a6d', '#05d9e8'] },
+  pastel:    { name: { es: 'Pastel', en: 'Pastel' }, colors: ['#ffc8dd', '#bde0fe', '#cdb4db'] },
+  lava:      { name: { es: 'Lava', en: 'Lava' }, colors: ['#1a0000', '#c1121f', '#ffb703'] },
+  ice:       { name: { es: 'Hielo', en: 'Ice' }, colors: ['#03045e', '#48cae4', '#ffffff'] },
+  gold:      { name: { es: 'Oro', en: 'Gold' }, colors: ['#3d2b00', '#d4a017', '#fff4c2'] },
+  mono:      { name: { es: 'Blanco', en: 'White' }, colors: ['#202020', '#9a9a9a', '#ffffff'] },
+};
+
+const P = (label, def = 0.5, min = 0, max = 1, step = 0.01) => ({ label, def, min, max, step });
+
+// category: ambient | party | nature | geometric | utility
+export const EFFECTS = {
+  none:        { name: { es: 'Ninguno', en: 'None' }, category: 'utility', palette: 'mono' },
+  aurora:      { name: { es: 'Aurora', en: 'Aurora' }, category: 'nature', palette: 'aurora',
+                 p1: P({ es: 'Capas', en: 'Layers' }, 0.6), p2: P({ es: 'Nitidez', en: 'Sharpness' }, 0.4) },
+  nebula:      { name: { es: 'Nebulosa', en: 'Nebula' }, category: 'ambient', palette: 'cyberpunk',
+                 p1: P({ es: 'Turbulencia', en: 'Turbulence' }, 0.5), p2: P({ es: 'Estrellas', en: 'Stars' }, 0.5) },
+  liquid:      { name: { es: 'Líquido', en: 'Liquid' }, category: 'ambient', palette: 'sunset',
+                 p1: P({ es: 'Distorsión', en: 'Warp' }, 0.5), p2: P({ es: 'Variación', en: 'Variation' }, 0.3) },
+  plasma:      { name: { es: 'Plasma', en: 'Plasma' }, category: 'party', palette: 'neon',
+                 p1: P({ es: 'Ondas', en: 'Ripples' }, 0.3), p2: P({ es: 'Contraste', en: 'Contrast' }, 0.5) },
+  fire:        { name: { es: 'Fuego', en: 'Fire' }, category: 'nature', palette: 'fire',
+                 p1: P({ es: 'Altura', en: 'Height' }, 0.4), p2: P({ es: 'Suavidad', en: 'Softness' }, 0.3) },
+  caustics:    { name: { es: 'Agua / cáusticas', en: 'Water caustics' }, category: 'nature', palette: 'ocean',
+                 p1: P({ es: 'Brillo de luz', en: 'Light strength' }, 0.5), p2: P({ es: 'Profundidad', en: 'Depth' }, 0.5) },
+  clouds:      { name: { es: 'Nubes / humo', en: 'Clouds / smoke' }, category: 'nature', palette: 'pastel',
+                 p1: P({ es: 'Turbulencia', en: 'Turbulence' }, 0.4), p2: P({ es: 'Densidad', en: 'Density' }, 0.5) },
+  tunnel:      { name: { es: 'Túnel', en: 'Tunnel' }, category: 'party', palette: 'cyberpunk',
+                 p1: P({ es: 'Anillos', en: 'Rings' }, 0.3), p2: P({ es: 'Rayos', en: 'Spokes' }, 0.4) },
+  kaleidoscope:{ name: { es: 'Caleidoscopio', en: 'Kaleidoscope' }, category: 'geometric', palette: 'neon',
+                 p1: P({ es: 'Segmentos', en: 'Segments' }, 0.4), p2: P({ es: 'Detalle', en: 'Detail' }, 0.5) },
+  mandala:     { name: { es: 'Espiral mandala', en: 'Mandala spiral' }, category: 'geometric', palette: 'gold',
+                 p1: P({ es: 'Brazos', en: 'Arms' }, 0.3), p2: P({ es: 'Torsión', en: 'Twist' }, 0.4) },
+  starwarp:    { name: { es: 'Hiperespacio', en: 'Star warp' }, category: 'party', palette: 'ice',
+                 p1: P({ es: 'Velocidad', en: 'Velocity' }, 0.4), p2: P({ es: 'Densidad', en: 'Density' }, 0.5) },
+  voronoi:     { name: { es: 'Cristales', en: 'Crystals' }, category: 'geometric', palette: 'ice',
+                 p1: P({ es: 'Grosor borde', en: 'Edge width' }, 0.3), p2: P({ es: 'Parpadeo', en: 'Flicker' }, 0.4) },
+  hexgrid:     { name: { es: 'Panal hexagonal', en: 'Hex pulse' }, category: 'geometric', palette: 'cyberpunk',
+                 p1: P({ es: 'Aleatoriedad', en: 'Randomness' }, 0.3), p2: P({ es: 'Relleno', en: 'Fill' }, 0.5) },
+  waves:       { name: { es: 'Ondas de luz', en: 'Light waves' }, category: 'party', palette: 'neon',
+                 p1: P({ es: 'Turbulencia', en: 'Turbulence' }, 0.3), p2: P({ es: 'Grosor', en: 'Thickness' }, 0.4) },
+  metaballs:   { name: { es: 'Lámpara de lava', en: 'Lava lamp' }, category: 'ambient', palette: 'lava',
+                 p1: P({ es: 'Tamaño', en: 'Size' }, 0.4), p2: P({ es: 'Suavidad', en: 'Softness' }, 0.3) },
+  matrix:      { name: { es: 'Lluvia digital', en: 'Digital rain' }, category: 'party', palette: 'forest',
+                 p1: P({ es: 'Columnas', en: 'Columns' }, 0.5), p2: P({ es: 'Estela', en: 'Trail' }, 0.4) },
+  gradient:    { name: { es: 'Degradado ambiente', en: 'Ambient gradient' }, category: 'ambient', palette: 'sunset',
+                 p1: P({ es: 'Frecuencia', en: 'Frequency' }, 0.4), p2: P({ es: '—', en: '—' }, 0) },
+  solid:       { name: { es: 'Color sólido', en: 'Solid color' }, category: 'utility', palette: 'sunset' },
+  testgrid:    { name: { es: 'Patrón: grilla', en: 'Pattern: grid' }, category: 'utility', palette: 'mono',
+                 p1: P({ es: 'Divisiones', en: 'Divisions' }, 0.3) },
+  testbars:    { name: { es: 'Patrón: barras', en: 'Pattern: bars' }, category: 'utility', palette: 'mono' },
+  media:       { name: { es: 'Imagen / video', en: 'Image / video' }, category: 'utility', palette: 'mono' },
+};
+
+export const PARTICLES = {
+  none:      { name: { es: 'Sin partículas', en: 'No particles' } },
+  flow:      { name: { es: 'Campo de flujo', en: 'Flow field' }, count: 60000, size: 0.35, trails: 0.85,
+               p1: P({ es: 'Escala ruido', en: 'Noise scale' }, 0.4), p2: P({ es: 'Turbulencia', en: 'Turbulence' }, 0.5) },
+  galaxy:    { name: { es: 'Galaxia', en: 'Galaxy' }, count: 80000, size: 0.3, trails: 0.5,
+               p1: P({ es: 'Brazos', en: 'Arms' }, 0.3), p2: P({ es: 'Inclinación', en: 'Tilt' }, 0.5) },
+  fireflies: { name: { es: 'Luciérnagas', en: 'Fireflies' }, count: 400, size: 0.8, trails: 0.3,
+               p1: P({ es: 'Deambular', en: 'Wander' }, 0.5), p2: P({ es: 'Parpadeo', en: 'Blink' }, 0.5) },
+  snow:      { name: { es: 'Nieve', en: 'Snow' }, count: 4000, size: 0.6, trails: 0,
+               p1: P({ es: 'Viento', en: 'Wind' }, 0.5), p2: P({ es: 'Balanceo', en: 'Sway' }, 0.5) },
+  embers:    { name: { es: 'Brasas', en: 'Embers' }, count: 6000, size: 0.45, trails: 0.6,
+               p1: P({ es: 'Turbulencia', en: 'Turbulence' }, 0.5), p2: P({ es: 'Ancho', en: 'Spread' }, 0.6) },
+  rain:      { name: { es: 'Lluvia', en: 'Rain' }, count: 5000, size: 0.3, trails: 0.75,
+               p1: P({ es: 'Viento', en: 'Wind' }, 0.5), p2: P({ es: 'Intensidad', en: 'Heaviness' }, 0.5) },
+  attractor: { name: { es: 'Atractor extraño', en: 'Strange attractor' }, count: 120000, size: 0.2, trails: 0.6,
+               p1: P({ es: 'Zoom', en: 'Zoom' }, 0.5), p2: P({ es: 'Rotación', en: 'Rotation' }, 0.4) },
+  vortex:    { name: { es: 'Vórtice', en: 'Vortex' }, count: 50000, size: 0.3, trails: 0.8,
+               p1: P({ es: 'Succión', en: 'Pull' }, 0.4), p2: P({ es: 'Giro', en: 'Swirl' }, 0.6) },
+  fountain:  { name: { es: 'Fuente', en: 'Fountain' }, count: 20000, size: 0.4, trails: 0.7,
+               p1: P({ es: 'Apertura', en: 'Spread' }, 0.4), p2: P({ es: 'Gravedad', en: 'Gravity' }, 0.5) },
+  bokeh:     { name: { es: 'Bokeh', en: 'Bokeh' }, count: 120, size: 1, trails: 0,
+               p1: P({ es: 'Deriva', en: 'Drift' }, 0.4), p2: P({ es: 'Desenfoque', en: 'Blur' }, 0.6) },
+};
+
+export const PARTICLE_MODE_INDEX = Object.fromEntries(Object.keys(PARTICLES).map((k, i) => [k, i - 1]));
+
+export const EFFECT_PARAMS = ['speed', 'intensity', 'scale', 'hue', 'p1', 'p2', 'audio'];
+
+let idCounter = 0;
+export function uid(prefix = 'id') {
+  idCounter = (idCounter + 1) % 1e6;
+  return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}${idCounter.toString(36)}`;
+}
+
+export function defaultEffectParams(effectId = 'aurora') {
+  const fx = EFFECTS[effectId] || EFFECTS.aurora;
+  return {
+    speed: 0.5, intensity: 1, scale: 1, hue: 0, audio: 0.5,
+    p1: fx.p1 ? fx.p1.def : 0.5,
+    p2: fx.p2 ? fx.p2.def : 0.5,
+    colors: [...(PALETTES[fx.palette] || PALETTES.aurora).colors],
+  };
+}
+
+export function defaultParticles(mode = 'none') {
+  const pm = PARTICLES[mode] || PARTICLES.none;
+  return {
+    mode,
+    count: pm.count || 20000,
+    size: pm.size ?? 0.4,
+    speed: 0.5,
+    trails: pm.trails ?? 0.6,
+    p1: pm.p1 ? pm.p1.def : 0.5,
+    p2: pm.p2 ? pm.p2.def : 0.5,
+    colors: null, // null = follow the surface palette
+  };
+}
+
+export function defaultSurface(name = 'Superficie 1', corners) {
+  return {
+    id: uid('srf'),
+    name,
+    visible: true,
+    corners: corners || [[0, 0], [1, 0], [1, 1], [0, 1]],
+    effect: 'aurora',
+    params: defaultEffectParams('aurora'),
+    particles: defaultParticles('none'),
+    media: { url: '', type: '', fit: 'cover', loop: true, muted: true },
+    opacity: 1,
+    feather: 0,
+    blend: 'normal',
+  };
+}
+
+export function defaultOutput() {
+  return {
+    keystone: [[0, 0], [1, 0], [1, 1], [0, 1]],
+    flipX: false,
+    flipY: false,
+    brightness: 1,
+    contrast: 1,
+    gamma: 1,
+    saturation: 1,
+    temperature: 0,
+    edgeBlend: { left: 0, right: 0, top: 0, bottom: 0, gamma: 2.2 },
+    vignette: 0,
+    renderScale: 1,
+    autoQuality: true,
+    testPattern: 'off',
+    showFps: false,
+  };
+}
+
+export function defaultState() {
+  return {
+    version: 1,
+    sceneName: 'Aurora',
+    sceneId: 'preset-aurora',
+    master: { brightness: 1, blackout: false },
+    surfaces: [defaultSurface('Fondo')],
+    masks: [],
+    output: defaultOutput(),
+    audio: { mode: 'off', bpm: 120 },
+  };
+}
+
+export function defaultMask(kind = 'rect') {
+  let points;
+  if (kind === 'circle') {
+    points = [];
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      points.push([0.5 + Math.cos(a) * 0.12, 0.5 + Math.sin(a) * 0.2]);
+    }
+  } else {
+    points = [[0.4, 0.35], [0.6, 0.35], [0.6, 0.65], [0.4, 0.65]];
+  }
+  return { id: uid('msk'), name: kind === 'circle' ? 'Zona circular' : 'Zona protegida', enabled: true, mode: 'exclude', feather: 0.01, points };
+}
+
+// ---------- Built-in scenes ("ambientes") ----------
+function scene(id, name, surfaceContents, extra = {}) {
+  return {
+    id, builtIn: true, name,
+    surfaces: surfaceContents.map((c, i) => {
+      const s = defaultSurface(`Capa ${i + 1}`);
+      s.effect = c.effect;
+      s.params = { ...defaultEffectParams(c.effect), ...(c.params || {}) };
+      if (c.palette) s.params.colors = [...PALETTES[c.palette].colors];
+      s.particles = { ...defaultParticles(c.particles || 'none'), ...(c.particleParams || {}) };
+      if (c.corners) s.corners = c.corners;
+      return s;
+    }),
+    ...extra,
+  };
+}
+
+export const PRESET_SCENES = [
+  scene('preset-aurora', { es: 'Noche de aurora', en: 'Aurora night' }, [{ effect: 'aurora', particles: 'snow', particleParams: { count: 1500, size: 0.35, speed: 0.25 } }]),
+  scene('preset-galaxy', { es: 'Galaxia', en: 'Galaxy' }, [{ effect: 'nebula', params: { intensity: 0.55 }, particles: 'galaxy' }]),
+  scene('preset-forest', { es: 'Bosque encantado', en: 'Enchanted forest' }, [{ effect: 'clouds', palette: 'forest', params: { intensity: 0.45, speed: 0.25 }, particles: 'fireflies' }]),
+  scene('preset-ocean', { es: 'Fondo del mar', en: 'Deep ocean' }, [{ effect: 'caustics', particles: 'bokeh', particleParams: { count: 60, speed: 0.2 } }]),
+  scene('preset-campfire', { es: 'Fogata', en: 'Campfire' }, [{ effect: 'fire', particles: 'embers' }]),
+  scene('preset-snow', { es: 'Nevada tranquila', en: 'Quiet snowfall' }, [{ effect: 'gradient', palette: 'ice', params: { intensity: 0.5, speed: 0.2 }, particles: 'snow' }]),
+  scene('preset-rain', { es: 'Tormenta', en: 'Rainstorm' }, [{ effect: 'clouds', palette: 'mono', params: { intensity: 0.35, speed: 0.6 }, particles: 'rain' }]),
+  scene('preset-neon', { es: 'Fiesta neón', en: 'Neon party' }, [{ effect: 'tunnel', params: { audio: 1 }, particles: 'vortex', particleParams: { speed: 0.7 } }], { audio: { mode: 'bpm', bpm: 124 } }),
+  scene('preset-zen', { es: 'Zen', en: 'Zen' }, [{ effect: 'liquid', palette: 'pastel', params: { speed: 0.2, intensity: 0.8 } }]),
+  scene('preset-lava', { es: 'Lámpara de lava', en: 'Lava lamp' }, [{ effect: 'metaballs', params: { speed: 0.35 } }]),
+  scene('preset-attractor', { es: 'Caos hipnótico', en: 'Hypnotic chaos' }, [{ effect: 'none', particles: 'attractor', palette: 'neon' }]),
+  scene('preset-flow', { es: 'Seda fluida', en: 'Silk flow' }, [{ effect: 'none', palette: 'aurora', particles: 'flow' }]),
+  scene('preset-crystal', { es: 'Cueva de cristal', en: 'Crystal cave' }, [{ effect: 'voronoi', particles: 'fireflies', particleParams: { count: 200 } }]),
+  scene('preset-mandala', { es: 'Mandala', en: 'Mandala' }, [{ effect: 'kaleidoscope', palette: 'gold' }]),
+];
+
+const CONTENT_KEYS = ['effect', 'params', 'particles', 'media', 'blend', 'opacity'];
+
+/**
+ * Apply a scene to a display state.
+ * mode 'content': keep calibration (surface corners, masks, output optics) and only replace what is shown.
+ *   A one-surface scene is applied to every existing surface; otherwise surfaces are matched by index.
+ * mode 'full': replace surfaces and masks (keeps output optics, which belong to the physical projector).
+ */
+export function applyScene(state, sceneDef, mode = 'content') {
+  const next = structuredClone(state);
+  const srcSurfaces = sceneDef.surfaces || [];
+  next.sceneId = sceneDef.id;
+  next.sceneName = sceneDef.name;
+  if (sceneDef.audio) next.audio = { ...next.audio, ...sceneDef.audio };
+  if (mode === 'full' || next.surfaces.length === 0) {
+    next.surfaces = srcSurfaces.map((s) => ({ ...structuredClone(s), id: uid('srf') }));
+    if (Array.isArray(sceneDef.masks)) next.masks = structuredClone(sceneDef.masks);
+    return next;
+  }
+  if (srcSurfaces.length === 0) return next;
+  next.surfaces = next.surfaces.map((surf, i) => {
+    const src = srcSurfaces.length === 1 ? srcSurfaces[0] : srcSurfaces[i];
+    if (!src) return surf;
+    const merged = { ...surf };
+    for (const k of CONTENT_KEYS) if (src[k] !== undefined) merged[k] = structuredClone(src[k]);
+    return merged;
+  });
+  if (srcSurfaces.length > 1) {
+    for (let i = next.surfaces.length; i < srcSurfaces.length; i++) {
+      next.surfaces.push({ ...structuredClone(srcSurfaces[i]), id: uid('srf') });
+    }
+  }
+  return next;
+}
+
+/** Extract a reusable scene from a display state. */
+export function sceneFromState(state, name) {
+  return {
+    name: name || state.sceneName || 'Escena',
+    surfaces: structuredClone(state.surfaces),
+    masks: structuredClone(state.masks),
+    audio: structuredClone(state.audio),
+  };
+}
+
+export function localized(v, lang = 'es') {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  return v[lang] || v.es || v.en || '';
+}
+
+/** Defensive normalisation of a state coming from disk or network. */
+export function normalizeState(s) {
+  const base = defaultState();
+  if (!s || typeof s !== 'object') return base;
+  const out = { ...base, ...s };
+  out.master = { ...base.master, ...(s.master || {}) };
+  out.output = { ...base.output, ...(s.output || {}) };
+  out.output.edgeBlend = { ...base.output.edgeBlend, ...((s.output || {}).edgeBlend || {}) };
+  out.audio = { ...base.audio, ...(s.audio || {}) };
+  out.surfaces = Array.isArray(s.surfaces) ? s.surfaces.map((x) => {
+    const d = defaultSurface(x.name);
+    return {
+      ...d, ...x,
+      params: { ...defaultEffectParams(x.effect), ...(x.params || {}) },
+      particles: { ...defaultParticles((x.particles || {}).mode || 'none'), ...(x.particles || {}) },
+      media: { ...d.media, ...(x.media || {}) },
+    };
+  }) : base.surfaces;
+  out.masks = Array.isArray(s.masks) ? s.masks : [];
+  return out;
+}

@@ -1,0 +1,23 @@
+# Life Projector — run with:  docker compose up -d
+# Then open http://<your-computer-ip>:8080 on your phone (controller)
+# and http://<your-computer-ip>:8080/display on the projector / TV.
+services:
+  life-projector:
+    build: .
+    image: life-projector:latest
+    container_name: life-projector
+    restart: unless-stopped
+    ports:
+      - "8080:8080"   # HTTP  (controller + displays)
+      - "8443:8443"   # HTTPS (self-signed: microphone, wake-lock, second screen APIs)
+    volumes:
+      - lp-data:/data   # scenes, display calibration, uploaded media, TLS cert
+    environment:
+      SERVER_NAME: "Life Projector"
+      # ACCESS_TOKEN: "change-me"   # optional: require a token for controllers & displays
+      # MAX_UPLOAD_MB: "1024"
+      # PUBLIC_URL: "http://192.168.1.50:8080"
+      MDNS: "false"     # mDNS needs host networking, see docker-compose.host.yml
+
+volumes:
+  lp-data:
