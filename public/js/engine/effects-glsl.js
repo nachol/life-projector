@@ -499,8 +499,11 @@ export const MEDIA_FS = `#version 300 es
 precision highp float;
 in vec2 vUv;
 out vec4 outColor;
-uniform sampler2D uTex;
-uniform vec2 uTexSize;
+uniform sampler2D uTex, uTex2;     // current photo, next photo (gallery)
+uniform vec2 uTexSize, uTexSize2;
+uniform vec3 uKB1, uKB2;           // Ken Burns per photo: zoom, pan x, pan y
+uniform float uMix, uSeed;         // gallery transition 0..1, per-slide pattern seed
+uniform int uTrans;                // 0 crossfade, 1 brush strokes
 uniform float uAspect, uFit, uIntensity, uHue, uFrameW, uMatW, uPaint, uWeave;
 uniform int uFrame; // 0 none, 1 wood, 2 gold, 3 gallery, 4 canvas, 5 polaroid
 uniform vec3 uFrameColor, uMatColor;
@@ -511,15 +514,40 @@ vec3 hueShift(vec3 c, float h) {
   return c * ca + cross(k, c) * sin(h * 6.28318531) + k * dot(k, c) * (1. - ca);
 }
 const vec2 LIGHT = vec2(-0.7071, 0.7071); // from the top-left
-vec3 photoAt(vec2 puv, vec2 area) {
+vec3 photoAt(sampler2D tex, vec2 texSize, vec3 kb, vec2 puv, vec2 area) {
   float ra = area.x / max(area.y, 1e-5);
-  float ta = uTexSize.x / max(uTexSize.y, 1.);
+  float ta = texSize.x / max(texSize.y, 1.);
   vec2 s = vec2(1.);
   if (uFit < 0.5) s = ra > ta ? vec2(1., ta / ra) : vec2(ra / ta, 1.);
   else if (uFit < 1.5) s = ra > ta ? vec2(ra / ta, 1.) : vec2(1., ta / ra);
   vec2 uv = (puv - 0.5) * s + 0.5;
   if (uv.x < 0. || uv.x > 1. || uv.y < 0. || uv.y > 1.) return vec3(-1.); // letterbox
-  return texture(uTex, vec2(uv.x, 1. - uv.y)).rgb;
+  // Ken Burns inside the photo's own box: zoom >= 1 and a bounded pan keep it within 0..1,
+  // so it never uncovers the letterbox.
+  uv = (uv - 0.5) / max(kb.x, 1.) + 0.5 + kb.yz;
+  return texture(tex, vec2(uv.x, 1. - uv.y)).rgb;
+}
+
+// Brush-stroke reveal: strokes follow a smooth direction field (no per-cell blocks); large
+// regions are blocked in first, and the order is spread over 0..1 so it fills in evenly.
+float revealMask(vec2 puv, vec2 area, float progress, float seed) {
+  vec2 sp = puv * vec2(area.x / area.y, 1.) + seed * vec2(3.7, 1.3);
+  float a = fbm(sp * 1.3 + 7.1) * 6.2831;
+  vec2 r = mat2(cos(a), sin(a), -sin(a), cos(a)) * sp;
+  float stroke = noise(r * vec2(22., 4.)) * 0.6 + noise(r * vec2(45., 8.)) * 0.4;
+  float order = smoothstep(0.26, 0.74, 0.6 * fbm(sp * 1.8 + 3.1) + 0.4 * stroke);
+  return smoothstep(order - 0.04, order + 0.04, progress * 1.1 - 0.05);
+}
+
+// Current photo, blended into the next one during a gallery transition.
+vec3 photoBlend(vec2 puv, vec2 area, vec3 bar) {
+  vec3 a = photoAt(uTex, uTexSize, uKB1, puv, area);
+  if (a.x < 0.) a = bar;
+  if (uMix <= 0.) return a;
+  vec3 b = photoAt(uTex2, uTexSize2, uKB2, puv, area);
+  if (b.x < 0.) b = bar;
+  float m = uTrans == 1 ? revealMask(puv, area, uMix, uSeed) : uMix;
+  return mix(a, b, m);
 }
 float mirror1(float x) { return x < 0. ? -x : (x > 1. ? 2. - x : x); }
 
@@ -581,8 +609,7 @@ void main() {
     else if (rmin == rb) { along = q.x; dir = vec2(0., 1.);  seed = 3.; sideShade = 0.38; }
     else                 { along = q.x; dir = vec2(0., -1.); seed = 4.; sideShade = 0.75; }
     if (uFrame == 4) { // stretched canvas: the photo wraps around the sides
-      vec3 c = photoAt(vec2(mirror1(puv.x), mirror1(puv.y)), area);
-      if (c.x < 0.) c = vec3(0.);
+      vec3 c = photoBlend(vec2(mirror1(puv.x), mirror1(puv.y)), area, vec3(0.));
       col = c * sideShade * mix(0.75, 1., rmin) * (1. - 0.5 * smoothstep(0.9, 1., rmin));
     } else {
       col = frameColor(along, rmin, dir, seed);
@@ -598,23 +625,13 @@ void main() {
     float dOut = min(min(q.x - b.x, size.x - b.y - q.x), min(q.y - b.z, size.y - b.w - q.y));
     col *= 1. - 0.25 * exp(-max(dOut, 0.) / 0.012) * (fw > 0. ? 1. : 0.);
   } else {
-    vec3 c = photoAt(puv, area);
-    if (c.x < 0.) c = (fw > 0. || mw > 0.) ? uMatColor : vec3(0.); // letterbox bars take the mat colour inside a frame
+    // letterbox bars take the mat colour inside a frame
+    vec3 c = photoBlend(puv, area, (fw > 0. || mw > 0.) ? uMatColor : vec3(0.));
     if (fw > 0. && mw <= 0. && uFrame != 4) {
       float dTop = (pmax.y - q.y), dLeft = (q.x - pmin.x);
       c *= (1. - 0.3 * exp(-dTop / 0.012)) * (1. - 0.22 * exp(-dLeft / 0.012));
     }
-    if (uPaint >= 0.) {
-      // Brush strokes follow a smooth direction field (no per-cell blocks); large regions are
-      // blocked in first, and the order is spread over 0..1 so the painting fills in evenly.
-      vec2 sp = puv * vec2(area.x / area.y, 1.);
-      float a = fbm(sp * 1.3 + 7.1) * 6.2831;
-      vec2 r = mat2(cos(a), sin(a), -sin(a), cos(a)) * sp;
-      float stroke = noise(r * vec2(22., 4.)) * 0.6 + noise(r * vec2(45., 8.)) * 0.4;
-      float order = smoothstep(0.26, 0.74, 0.6 * fbm(sp * 1.8 + 3.1) + 0.4 * stroke);
-      float reveal = smoothstep(order - 0.04, order + 0.04, uPaint * 1.1 - 0.05);
-      c = mix(vec3(0.93, 0.91, 0.86), c, reveal);
-    }
+    if (uPaint >= 0.) c = mix(vec3(0.93, 0.91, 0.86), c, revealMask(puv, area, uPaint, 0.));
     col = c;
   }
   // Canvas threads only on the painted surface (and the wrapped sides of a stretched canvas),

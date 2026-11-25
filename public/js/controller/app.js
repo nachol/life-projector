@@ -139,6 +139,10 @@ conn.on('playlist', (m) => {
   if (app.tab === 'playlist') renderPanels();
 });
 
+conn.on('welcome', (m) => {
+  if (renderer && Number.isFinite(m.now)) renderer.clockOffset = m.now - Date.now();
+});
+
 conn.on('error', (m) => toast(`${t('error')}: ${m.message}`));
 
 function selectDisplay(id) {

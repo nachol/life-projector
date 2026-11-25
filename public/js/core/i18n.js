@@ -41,6 +41,11 @@ const DICT = {
     frame_hint: 'El proyector solo suma luz: los marcos se ven más reales sobre paredes claras. Los tonos muy oscuros se ven como "sin luz".',
     art_style: 'Estilo artístico', art_amount: 'Intensidad del estilo', paint_in: 'Animación: se pinta sola',
     paint_seconds: 'Duración', paint_loop: 'Repetir', paint_replay: 'Volver a pintar',
+    gallery: 'Galería (pase de fotos)', gallery_enable: 'Pasar varias fotos', gallery_photos: 'fotos',
+    gallery_hint: 'Elige las fotos de tu biblioteca. El marco y el estilo se mantienen; todas las pantallas muestran la misma foto al mismo tiempo.',
+    gallery_empty: 'Sube fotos con el botón de arriba para armar la galería.', gallery_seconds: 'Segundos por foto',
+    gallery_transition: 'Duración de la transición', ken_burns: 'Zoom lento (Ken Burns)', gallery_restart: 'Empezar de nuevo',
+    select_all: 'Todas', select_none: 'Ninguna',
   },
   en: {
     app_tagline: 'Projection mapping & ambient visuals',
@@ -84,6 +89,11 @@ const DICT = {
     frame_hint: 'A projector only adds light: frames look most real on light walls. Very dark tones show as "no light".',
     art_style: 'Artistic style', art_amount: 'Style strength', paint_in: 'Animation: paints itself',
     paint_seconds: 'Duration', paint_loop: 'Repeat', paint_replay: 'Paint again',
+    gallery: 'Gallery (slideshow)', gallery_enable: 'Show several photos', gallery_photos: 'photos',
+    gallery_hint: 'Pick photos from your library. Frame and style stay; every display shows the same photo at the same time.',
+    gallery_empty: 'Upload photos with the button above to build the gallery.', gallery_seconds: 'Seconds per photo',
+    gallery_transition: 'Transition length', ken_burns: 'Slow zoom (Ken Burns)', gallery_restart: 'Start over',
+    select_all: 'All', select_none: 'None',
   },
 };
 

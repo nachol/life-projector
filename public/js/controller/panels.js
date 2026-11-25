@@ -3,7 +3,7 @@ import { t, lang } from '../core/i18n.js';
 import {
   EFFECTS, PARTICLES, PALETTES, localized, defaultSurface, defaultEffectParams, defaultParticles,
   defaultMask, defaultOutput, uid, sceneFromState, customForSurface,
-  FRAME_STYLES, ART_STYLES, normalizeMedia,
+  FRAME_STYLES, ART_STYLES, GALLERY_TRANSITIONS, normalizeMedia,
 } from '../core/catalog.js';
 import { thumb } from './thumbs.js';
 import { api } from '../core/net.js';
@@ -223,8 +223,59 @@ function mediaControls(app, sf, set) {
       }, '🗑')))),
     h('div', { class: 'row' }, h('span', { class: 'muted' }, t('fit')),
       h('div', { class: 'grow' }, select([['cover', t('fit_cover')], ['contain', t('fit_contain')], ['stretch', t('fit_stretch')]], sf.media.fit, (v) => set((s) => { s.media.fit = v; })))),
+    ...galleryControls(app, sf, set),
     ...photoStyleControls(sf, set),
   ];
+}
+
+function galleryControls(app, sf, set) {
+  const g = normalizeMedia(sf.media).gallery;
+  // Wall-clock start shared by every screen (server-aligned through the preview renderer).
+  const now = () => Math.round(app.renderer?.now() ?? Date.now());
+  const setG = (fn, opts) => set((s) => { s.media = normalizeMedia(s.media); fn(s.media.gallery, s.media); }, opts);
+  const images = app.media.filter((m) => m.type === 'image');
+  const out = [
+    h('h3', {}, t('gallery')),
+    h('div', { class: 'row' }, checkbox(t('gallery_enable'), g.enabled, (v) => setG((x, media) => {
+      x.enabled = v;
+      if (v) {
+        x.startedAt = now();
+        x.seed = Math.floor(Math.random() * 1e9);
+        if (!x.items.length && media.url && media.type !== 'video') x.items = [{ url: media.url, type: 'image' }];
+      }
+    }))),
+  ];
+  if (!g.enabled) return out;
+  const selected = new Map(g.items.map((it, i) => [it.url, i + 1]));
+  out.push(
+    h('p', { class: 'muted small' }, t('gallery_hint')),
+    h('div', { class: 'row' },
+      h('span', { class: 'muted' }, `${g.items.length} ${t('gallery_photos')}`),
+      h('button', { type: 'button', class: 'btn small', onclick: () => setG((x) => { x.items = images.map((m) => ({ url: m.url, type: 'image' })); x.startedAt = now(); }) }, t('select_all')),
+      h('button', { type: 'button', class: 'btn small', onclick: () => setG((x) => { x.items = []; }) }, t('select_none')),
+      h('button', { type: 'button', class: 'btn small', onclick: () => setG((x) => { x.startedAt = now(); }) }, '↺ ' + t('gallery_restart'))),
+    h('div', { class: 'list' }, images.length ? images.map((m) => h('label', { class: `item${selected.has(m.url) ? ' active' : ''}` },
+      h('input', {
+        type: 'checkbox', checked: selected.has(m.url), onchange: (e) => setG((x) => {
+          x.items = e.target.checked ? [...x.items, { url: m.url, type: 'image' }] : x.items.filter((it) => it.url !== m.url);
+          x.startedAt = now();
+        }),
+      }),
+      h('span', { class: 'name' }, m.name),
+      selected.has(m.url) ? h('span', { class: 'meta' }, `#${selected.get(m.url)}`) : null)) : h('p', { class: 'muted small' }, t('gallery_empty'))),
+    slider(t('gallery_seconds'), g.seconds, { min: 3, max: 300, step: 1, format: (v) => `${Math.round(v)} s`, onInput: (v) => setG((x) => { x.seconds = v; }, { panels: false }) }),
+    h('div', { class: 'chips' }, Object.entries(GALLERY_TRANSITIONS).map(([id, tr]) => h('button', {
+      type: 'button', class: `chip${g.transition === id ? ' active' : ''}`, onclick: () => setG((x) => { x.transition = id; }),
+    }, L(tr.name)))),
+  );
+  if (g.transition !== 'cut') {
+    out.push(slider(t('gallery_transition'), g.transitionSeconds, { min: 0.3, max: 10, step: 0.1, format: (v) => `${v.toFixed(1)} s`, onInput: (v) => setG((x) => { x.transitionSeconds = v; }, { panels: false }) }));
+  }
+  out.push(
+    slider(t('ken_burns'), g.kenBurns, { onInput: (v) => setG((x) => { x.kenBurns = v; }, { panels: false }) }),
+    h('div', { class: 'row' }, checkbox(t('shuffle'), g.shuffle, (v) => setG((x) => { x.shuffle = v; x.seed = Math.floor(Math.random() * 1e9); }))),
+  );
+  return out;
 }
 
 function photoStyleControls(sf, set) {
@@ -274,6 +325,8 @@ function photoStyleControls(sf, set) {
   if (art.style !== 'none') {
     out.push(slider(t('art_amount'), art.amount, { onInput: (v) => setArt((x) => { x.amount = v; }, { panels: false }) }));
   }
+  // In a gallery the "brush strokes" transition replaces the single-photo paint-in.
+  if (m.gallery.enabled) return out;
   out.push(h('div', { class: 'row' }, checkbox(t('paint_in'), art.paint, (v) => setArt((x) => { x.paint = v; x.paintRun = (x.paintRun || 0) + 1; }))));
   if (art.paint) {
     out.push(

@@ -145,14 +145,98 @@ export function defaultMedia() {
     url: '', type: '', fit: 'cover', loop: true, muted: true,
     frame: { style: 'none', width: 0.07, color: '#8a5a2b', mat: 0.05, matColor: '#eeeae0' },
     art: { style: 'none', amount: 0.6, paint: false, paintSeconds: 20, paintLoop: false, paintRun: 0 },
+    gallery: defaultGallery(),
   };
+}
+
+export const GALLERY_TRANSITIONS = {
+  fade:  { name: { es: 'Fundido', en: 'Crossfade' } },
+  paint: { name: { es: 'Pinceladas', en: 'Brush strokes' } },
+  cut:   { name: { es: 'Corte', en: 'Cut' } },
+};
+export const GALLERY_MAX_ITEMS = 200;
+const isVideoUrl = (u) => /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(u);
+
+export function defaultGallery() {
+  // startedAt is a wall-clock timestamp (ms): every display and the preview compute the
+  // same photo from it, so projectors don't drift apart.
+  return { enabled: false, items: [], seconds: 10, transition: 'fade', transitionSeconds: 1.5, kenBurns: 0.5, shuffle: false, seed: 1, startedAt: 0 };
+}
+
+function normalizeGallery(g) {
+  const d = defaultGallery();
+  const src = g && typeof g === 'object' ? g : {};
+  const num = (v, def, lo, hi) => (Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : def);
+  const out = { ...d, ...src };
+  out.enabled = !!src.enabled;
+  // Images only: a preloaded "next" video would autoplay hidden.
+  out.items = (Array.isArray(src.items) ? src.items : [])
+    .filter((it) => it && typeof it.url === 'string' && it.url && !isVideoUrl(it.url) && it.type !== 'video')
+    .slice(0, GALLERY_MAX_ITEMS)
+    .map((it) => ({ url: it.url, type: 'image' }));
+  out.seconds = num(src.seconds, d.seconds, 2, 3600);
+  out.transitionSeconds = num(src.transitionSeconds, d.transitionSeconds, 0, out.seconds * 0.6);
+  out.kenBurns = num(src.kenBurns, d.kenBurns, 0, 1);
+  out.seed = Math.floor(num(src.seed, d.seed, 0, 2 ** 31));
+  out.startedAt = num(src.startedAt, 0, 0, 1e15);
+  out.shuffle = !!src.shuffle;
+  if (!GALLERY_TRANSITIONS[out.transition]) out.transition = 'fade';
+  return out;
+}
+
+// ---------- slideshow schedule (pure; shared by the preview and every display) ----------
+function hash01(a) {
+  a = (a | 0) + 0x6d2b79f5 | 0;
+  let t = Math.imul(a ^ (a >>> 15), 1 | a);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+function permutation(cycle, n, seed) {
+  const keys = Array.from({ length: n }, (_, i) => [hash01(Math.imul(seed, 73856093) ^ Math.imul(cycle, 19349663) ^ Math.imul(i + 1, 83492791)), i]);
+  keys.sort((a, b) => a[0] - b[0]);
+  return keys.map((k) => k[1]);
+}
+function shuffledIndex(k, n, seed) {
+  if (n <= 2) return k % n; // nothing meaningful to shuffle
+  const c = Math.floor(k / n), r = k - c * n;
+  const p = permutation(c, n, seed);
+  // Never show the same photo twice in a row across a cycle boundary.
+  if (c > 0 && p[0] === permutation(c - 1, n, seed)[n - 1]) [p[0], p[1]] = [p[1], p[0]];
+  return p[r];
+}
+
+/**
+ * Which photos are on screen `elapsed` seconds after the gallery started.
+ * Slot k shows photo order(k); during its last `trans` seconds it blends into order(k+1).
+ * A photo's Ken Burns progress runs from the moment it starts fading in, so it is the same
+ * value just before and just after a slot boundary (no jump when "next" becomes "current").
+ */
+export function gallerySchedule(elapsed, n, seconds, trans, shuffle = false, seed = 1) {
+  if (!(n > 0)) return null;
+  const S = Math.max(0.1, seconds);
+  const T = Math.max(0, Math.min(trans, S * 0.9));
+  const e = Math.max(0, elapsed);
+  const slot = Math.floor(e / S);
+  const t = e - slot * S;
+  const idx = (k) => (shuffle ? shuffledIndex(k, n, seed) : k % n);
+  const prog = (k) => Math.min(1, Math.max(0, (e - (k * S - T)) / (S + T)));
+  const mix = T > 0 ? Math.min(1, Math.max(0, (t - (S - T)) / T)) : 0;
+  return { cur: idx(slot), next: idx(slot + 1), mix, curSlot: slot, nextSlot: slot + 1, curProgress: prog(slot), nextProgress: prog(slot + 1) };
+}
+
+/** Ken Burns zoom / pan for one slide: zoom in only, pan bounded so the photo never leaves its box. */
+export function kenBurns(slot, progress, amount, seed = 1) {
+  const zoom = 1 + 0.18 * Math.max(0, Math.min(1, amount)) * progress;
+  const a = hash01(Math.imul(slot + 1, 2654435761) ^ seed) * Math.PI * 2;
+  const maxOff = (1 - 1 / zoom) / 2;
+  return [zoom, Math.cos(a) * maxOff, Math.sin(a) * maxOff];
 }
 
 /** Fill in fields added after a state / scene was saved. */
 export function normalizeMedia(m) {
   const d = defaultMedia();
   const src = m && typeof m === 'object' ? m : {};
-  const out = { ...d, ...src, frame: { ...d.frame, ...(src.frame || {}) }, art: { ...d.art, ...(src.art || {}) } };
+  const out = { ...d, ...src, frame: { ...d.frame, ...(src.frame || {}) }, art: { ...d.art, ...(src.art || {}) }, gallery: normalizeGallery(src.gallery) };
   if (!FRAME_STYLES[out.frame.style]) out.frame.style = 'none';
   if (!ART_STYLES[out.art.style]) out.art.style = 'none';
   return out;

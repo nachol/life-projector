@@ -118,7 +118,7 @@ export class Hub {
     const name = String(prev?.name || msg.name || `Display ${id.slice(-4)}`).slice(0, 60);
     this.store.upsertDisplay(id, { name, ua: String(msg.ua || '').slice(0, 120), w: msg.w, h: msg.h, lastSeen: Date.now() });
     this.live.set(id, { w: msg.w, h: msg.h, fps: 0 });
-    this.send(ws, { t: 'welcome', role: 'display', name, server: this.cfg.name });
+    this.send(ws, { t: 'welcome', role: 'display', name, server: this.cfg.name, now: Date.now() });
     this.send(ws, { t: 'state', displayId: id, state: this.store.getDisplayState(id) });
     console.log(`[hub] display online: ${name} (${id}) from ${ws.ip}`);
     this.broadcastDisplays();
@@ -127,7 +127,7 @@ export class Hub {
   helloController(ws) {
     ws.role = 'controller';
     this.controllers.add(ws);
-    this.send(ws, { t: 'welcome', role: 'controller', server: this.cfg.name });
+    this.send(ws, { t: 'welcome', role: 'controller', server: this.cfg.name, now: Date.now() });
     this.send(ws, { t: 'displays', list: this.displayList() });
   }
 

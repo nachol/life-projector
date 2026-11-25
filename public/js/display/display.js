@@ -78,6 +78,8 @@ conn.addEventListener('status', (e) => {
 
 conn.on('welcome', (m) => {
   if (m.name) setName(m.name);
+  // Align with the server clock so every screen shows the same gallery photo.
+  if (Number.isFinite(m.now)) renderer.clockOffset = m.now - Date.now();
 });
 
 conn.on('state', (m) => {
