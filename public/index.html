@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0714">
+  <meta name="description" content="Life Projector — open source projection mapping and ambient visuals for projectors, TVs and Google TV.">
+  <title>Life Projector</title>
+  <link rel="icon" href="/img/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/img/icon-192.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><use href="/img/icon.svg#mark"/></svg>
+      <div>
+        <div class="brand-name">Life Projector</div>
+        <div class="brand-tag" data-i18n="app_tagline"></div>
+      </div>
+    </div>
+    <button class="display-pill" id="display-pill" type="button">
+      <span class="dot" id="display-dot"></span>
+      <span id="display-name" data-i18n="select_display"></span>
+      <span class="fps" id="display-fps"></span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="top-actions">
+      <button class="icon-btn" id="btn-blackout" type="button" data-i18n-title="blackout" title="Blackout">⏻</button>
+      <button class="icon-btn" id="btn-lang" type="button" data-i18n-title="language">ES</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <div class="preview-outer" id="preview-outer">
+        <div class="preview-wrap" id="preview-wrap">
+          <canvas id="preview"></canvas>
+          <svg id="handles"></svg>
+          <div class="preview-empty" id="preview-empty"></div>
+        </div>
+      </div>
+      <div class="stage-bar">
+        <label class="toggle"><input type="checkbox" id="opt-live" checked><span data-i18n="live_preview"></span></label>
+        <label class="toggle"><input type="checkbox" id="opt-guides"><span data-i18n="calibrate_on_display"></span></label>
+        <div class="nudge" id="nudge" hidden>
+          <button type="button" data-nudge="-1,0" aria-label="left">←</button>
+          <button type="button" data-nudge="0,-1" aria-label="up">↑</button>
+          <button type="button" data-nudge="0,1" aria-label="down">↓</button>
+          <button type="button" data-nudge="1,0" aria-label="right">→</button>
+        </div>
+        <label class="master"><span data-i18n="master"></span><input type="range" id="master" min="0" max="1" step="0.01" value="1"></label>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <nav class="tabs" id="tabs">
+        <button type="button" data-tab="scenes" data-i18n="scenes"></button>
+        <button type="button" data-tab="effect" data-i18n="effect"></button>
+        <button type="button" data-tab="surfaces" data-i18n="surfaces"></button>
+        <button type="button" data-tab="masks" data-i18n="masks"></button>
+        <button type="button" data-tab="optics" data-i18n="optics"></button>
+        <button type="button" data-tab="audio" data-i18n="audio"></button>
+        <button type="button" data-tab="playlist" data-i18n="playlist"></button>
+      </nav>
+      <div class="tab-body" id="tab-body"></div>
+    </aside>
+  </main>
+
+  <dialog id="displays-dialog" class="sheet">
+    <form method="dialog" class="sheet-head">
+      <h2 data-i18n="displays"></h2>
+      <button class="icon-btn" value="close" aria-label="close">✕</button>
+    </form>
+    <div id="displays-list"></div>
+    <div class="cast-actions">
+      <button type="button" class="btn" id="btn-open-here" data-i18n="open_here"></button>
+      <button type="button" class="btn" id="btn-second" data-i18n="open_second"></button>
+      <button type="button" class="btn" id="btn-cast" data-i18n="cast"></button>
+    </div>
+    <p class="muted small" id="displays-help"></p>
+    <div class="qr-share"><img id="share-qr" alt=""><code id="share-url"></code></div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script type="module" src="/js/controller/app.js"></script>
+</body>
+</html>

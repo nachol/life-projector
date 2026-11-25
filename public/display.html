@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Life Projector · Display</title>
+  <link rel="icon" href="/img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: #fff; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    body.hide-cursor, body.hide-cursor * { cursor: none !important; }
+    canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+    #overlay { pointer-events: none; }
+    #info { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, rgba(20,10,40,.55), rgba(0,0,0,.8)); transition: opacity .6s; }
+    #info.hidden { opacity: 0; pointer-events: none; }
+    .card { text-align: center; max-width: 80vw; }
+    .logo { font-size: clamp(28px, 5vw, 64px); font-weight: 800; letter-spacing: -.02em; background: linear-gradient(90deg, #00ffa3, #00b3ff, #ff2a6d); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .name { font-size: clamp(20px, 3vw, 40px); margin: .3em 0 .8em; opacity: .9; }
+    .qr { width: clamp(140px, 22vh, 260px); height: clamp(140px, 22vh, 260px); margin: 0 auto 1em; padding: 10px; border-radius: 16px; background: rgba(255,255,255,.06); }
+    .qr img { width: 100%; height: 100%; }
+    .url { font-family: ui-monospace, monospace; font-size: clamp(14px, 2vw, 24px); opacity: .8; }
+    .hint { margin-top: 1.2em; font-size: clamp(12px, 1.4vw, 16px); opacity: .55; }
+    #status { position: fixed; left: 16px; bottom: 12px; font: 12px ui-monospace, monospace; opacity: .5; }
+    #fps { position: fixed; right: 12px; top: 10px; font: 14px ui-monospace, monospace; background: rgba(0,0,0,.5); padding: 4px 8px; border-radius: 6px; display: none; }
+    #identify { position: fixed; inset: 0; display: none; place-items: center; font-size: 10vw; font-weight: 800; text-shadow: 0 0 40px #00b3ff; border: 1.5vw solid #00b3ff; box-sizing: border-box; }
+    #error { position: fixed; inset: 0; display: none; place-items: center; text-align: center; padding: 10vw; font-size: 22px; }
+  </style>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <canvas id="overlay"></canvas>
+  <div id="info">
+    <div class="card">
+      <div class="logo">Life Projector</div>
+      <div class="name" id="info-name">…</div>
+      <div class="qr"><img id="qr" alt=""></div>
+      <div class="url" id="info-url"></div>
+      <div class="hint" id="info-hint">Escanea para controlar · Scan to control — F: pantalla completa / fullscreen · I: info</div>
+    </div>
+  </div>
+  <div id="identify"></div>
+  <div id="fps"></div>
+  <div id="status"></div>
+  <div id="error"></div>
+  <script type="module" src="/js/display/display.js"></script>
+</body>
+</html>
