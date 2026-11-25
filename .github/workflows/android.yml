@@ -2,8 +2,12 @@ name: Android TV app
 
 on:
   push:
-    paths: ["android-tv/**", ".github/workflows/android.yml"]
+    # Declaring only `tags` would silently skip branch pushes, so list both.
+    branches: ["**"]
     tags: ["v*"]
+    paths: ["android-tv/**", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["android-tv/**", ".github/workflows/android.yml"]
   workflow_dispatch:
 
 permissions:
