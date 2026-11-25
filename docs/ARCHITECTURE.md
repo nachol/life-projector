@@ -78,6 +78,26 @@ A surface with `effect: 'media'` shows an uploaded image or video. `media.frame`
 
 Old states and scenes without these fields are completed by `normalizeMedia()`.
 
+### Gallery (slideshow)
+
+`media.gallery` lists photos (images only: a preloaded video would autoplay hidden) and holds `seconds`,
+`transition` (`fade`, `paint`, `cut`), `transitionSeconds`, `kenBurns`, `shuffle`, `seed` and `startedAt`.
+
+- **Shared clock**: `startedAt` is a wall-clock timestamp. Every renderer computes the current photo from
+  `now() - startedAt`, where `now()` is `Date.now()` corrected by the offset the server sends in its `welcome`
+  message. Previews and projectors therefore show the same photo without any per-frame messages, and a slow
+  display can't fall behind.
+- **Schedule**: `gallerySchedule()` in `catalog.js` is pure and unit-tested. Slot k shows photo order(k) and blends
+  into order(k+1) during its last `transitionSeconds`. Each photo's Ken Burns progress counts from the moment it
+  starts fading in, so nothing jumps when "next" becomes "current". Shuffle is a seeded permutation per cycle that
+  never repeats a photo back to back.
+- **Ken Burns** (`kenBurns()`): zoom in only, with a pan bounded by the zoom, applied inside the photo's own box, so
+  it never uncovers letterbox bars.
+- **Rendering**: the photo pass receives the current and next photo (`uTex`, `uTex2`) with their own size and Ken
+  Burns, and blends them (`uMix`), reusing the brush-stroke mask for the `paint` transition. The frame and mat stay
+  put. The renderer keeps only those two photos loaded, each with its own cached stylise target; the next one is
+  decoded and stylised early in the slot. Files that fail to load (for example, deleted) are skipped.
+
 ## Protocol (WebSocket `/ws`, JSON)
 
 | From | Message | Meaning |

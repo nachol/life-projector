@@ -38,6 +38,7 @@ Es nuestro aporte a la comunidad que usa proyectores para crear ambientes. Clón
 | ⟳ **Programación** | Rota escenas automáticamente cada N minutos. Lo hace el servidor, así que funciona aunque cierres el celular. |
 | ✍️ **Crea tus efectos** | Pestaña **Crear**: editor GLSL en vivo con plantillas, errores marcados por línea y vista previa al instante. Guarda en tu biblioteca y comparte como archivo `.lpfx.json`. |
 | 🖼 **Fotos con marco y estilo** | Sube fotos y videos y mapéalos sobre cualquier superficie. Marcos de **madera**, **dorado clásico**, **galería** con paspartú, **bastidor/lienzo** y **Polaroid**. Estilos **óleo**, **acuarela**, **lápiz** y **puntillismo**, y una animación en la que la foto **se pinta sola**. Respeta la orientación de las fotos del celular. |
+| 🎞 **Galería de fotos** | Pase de fotos con fundido, pinceladas o corte, zoom lento (Ken Burns) y orden aleatorio, dentro del mismo marco y estilo. **Todas las pantallas muestran la misma foto al mismo tiempo.** |
 | 📡 **Multi-pantalla** | Controla varios proyectores a la vez; cada uno guarda su propia calibración. Aplica una escena a todos con un toque. |
 | 📱 **Control desde el celular** | Interfaz responsive (PWA instalable), en español e inglés. Las guías de calibración se ven en la pared mientras arrastras en el celular. |
 | 📺 **App Android / Google TV** | Descubre el servidor automáticamente (mDNS), pantalla completa, arranque automático al encender. |
@@ -131,6 +132,7 @@ Life Projector is a web app that turns any projector, TV or Google TV into a can
 - **Protection zones**: feathered polygons that block light (eyes, windows, screens) or restrict projection to a shape.
 - **Optics**: 4-corner keystone, mirror / flip (rear & ceiling mount), brightness, contrast, gamma, saturation, colour temperature, vignette, **edge blending** for multi-projector setups, test patterns.
 - **Photos with frames and painterly styles**: wood, classic gold, gallery with mat, stretched canvas and Polaroid frames; oil, watercolour, pencil and pointillism styles; a "paints itself" reveal animation. Phone photos keep their EXIF orientation.
+- **Photo gallery**: slideshow with crossfade, brush-stroke or cut transitions, slow Ken Burns zoom and shuffle, inside the same frame and style; every display shows the same photo at the same time.
 - **Create your own effects** in the app: live GLSL editor with templates, per-line errors and instant preview; save to your library and share as `.lpfx.json` files.
 - **Audio reactive**: auto BPM pulse with tap tempo, phone microphone streamed to the display, or the display's own microphone.
 - **14 built-in ambiences**, saved scenes, **server-side scene rotation** (keeps running with your phone off), image & video upload.

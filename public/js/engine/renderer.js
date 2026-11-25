@@ -10,7 +10,7 @@ import { Program, Target, FULLSCREEN_VS, createFullscreenTriangle, hexToRgb } fr
 import { effectFragmentSource, MEDIA_FS, ART_FS, EFFECT_GLSL, customFragmentSource, parseShaderErrors, hashString } from './effects-glsl.js';
 import { ParticleSystem } from './particles.js';
 import { squareToQuad, invert3, toGL } from '../core/homography.js';
-import { PARTICLE_MODE_INDEX, normalizeState, FRAME_STYLE_INDEX, ART_STYLE_INDEX } from '../core/catalog.js';
+import { PARTICLE_MODE_INDEX, normalizeState, FRAME_STYLE_INDEX, ART_STYLE_INDEX, gallerySchedule, kenBurns } from '../core/catalog.js';
 
 const COMPOSE_FS = `#version 300 es
 precision highp float;
@@ -132,6 +132,10 @@ export class Renderer {
     this.artProg = new Program(gl, FULLSCREEN_VS, ART_FS, null, 'art');
     this.maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
     this.stats = { artPasses: 0 };
+    // Wall-clock time (ms) for things every screen must agree on, like which gallery photo is
+    // showing. clockOffset aligns this device with the server; timeOverride is for tests.
+    this.clockOffset = 0;
+    this.timeOverride = null;
     this.scene = new Target(gl, 2, 2);
     this.snap = new Target(gl, 2, 2);
     this.runtimes = new Map();
@@ -298,42 +302,60 @@ export class Renderer {
     rt.bg.dispose();
     rt.fx?.dispose();
     rt.ps?.dispose();
-    this.#disposeMedia(rt);
+    this.#pruneMedia(rt, new Set());
   }
 
-  #disposeMedia(rt) {
-    if (!rt.media) return;
-    if (rt.media.el instanceof HTMLVideoElement) { rt.media.el.pause(); rt.media.el.removeAttribute('src'); rt.media.el.load(); }
-    this.gl.deleteTexture(rt.media.tex);
-    rt.media = null;
-    rt.art?.dispose();
-    rt.art = null;
-    rt.artKey = null;
+  now() {
+    return this.timeOverride ?? Date.now() + this.clockOffset;
+  }
+
+  #disposeEntry(media) {
+    media.disposed = true;
+    if (media.el instanceof HTMLVideoElement) { media.el.pause(); media.el.removeAttribute('src'); media.el.load(); }
+    this.gl.deleteTexture(media.tex);
+    media.art?.dispose();
+    media.art = null;
+  }
+
+  /** Keep only the media in `keep` (a single photo, or a gallery's current + next); free the rest. */
+  #pruneMedia(rt, keep) {
+    if (!rt.medias) return;
+    for (const [url, m] of rt.medias) {
+      if (!keep.has(url)) { this.#disposeEntry(m); rt.medias.delete(url); }
+    }
+  }
+
+  /** Get or start loading one image / video. Files that fail to load are remembered in rt.failedUrls. */
+  #mediaEntry(rt, url, type) {
+    rt.medias ||= new Map();
+    let media = rt.medias.get(url);
+    if (media) return media;
+    const isVideo = type === 'video' || /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(url);
+    media = { url, tex: this.#createTex(), ready: false, failed: false, w: 1, h: 1, el: null, isVideo, art: null, artKey: null, disposed: false };
+    const fail = () => { media.failed = true; (rt.failedUrls ||= new Set()).add(url); };
+    if (isVideo) {
+      const v = document.createElement('video');
+      v.crossOrigin = 'anonymous';
+      v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = true;
+      v.setAttribute('playsinline', '');
+      v.src = url;
+      v.addEventListener('loadeddata', () => { media.ready = true; media.w = v.videoWidth; media.h = v.videoHeight; });
+      v.addEventListener('error', fail);
+      v.play().catch(() => {});
+      media.el = v;
+    } else {
+      this.#loadImage(media, () => !media.disposed, fail);
+    }
+    rt.medias.set(url, media);
+    return media;
   }
 
   #media(rt, m) {
-    const gl = this.gl;
-    if (!m?.url) { this.#disposeMedia(rt); return null; }
-    if (rt.media && rt.media.url !== m.url) this.#disposeMedia(rt);
-    if (!rt.media) {
-      const isVideo = m.type === 'video' || /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(m.url);
-      const media = { url: m.url, tex: this.#createTex(), ready: false, w: 1, h: 1, el: null, isVideo };
-      if (isVideo) {
-        const v = document.createElement('video');
-        v.crossOrigin = 'anonymous';
-        v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = true;
-        v.setAttribute('playsinline', '');
-        v.src = m.url;
-        v.addEventListener('loadeddata', () => { media.ready = true; media.w = v.videoWidth; media.h = v.videoHeight; });
-        v.play().catch(() => {});
-        media.el = v;
-      } else {
-        this.#loadImage(media, () => rt.media === media);
-      }
-      rt.media = media;
-    }
-    const media = rt.media;
+    if (!m?.url) { this.#pruneMedia(rt, new Set()); return null; }
+    const media = this.#mediaEntry(rt, m.url, m.type);
+    this.#pruneMedia(rt, new Set([m.url]));
     if (media.isVideo) {
+      const gl = this.gl;
       const v = media.el;
       v.loop = m.loop !== false;
       v.muted = m.muted !== false;
@@ -350,7 +372,7 @@ export class Renderer {
    * Decode a photo honouring its EXIF orientation (phone pictures) and shrink it to fit the
    * GPU's texture limit. Falls back to a plain <img> on browsers without these options.
    */
-  async #loadImage(media, stillWanted) {
+  async #loadImage(media, stillWanted, onFail = () => {}) {
     const gl = this.gl;
     const upload = (src, w, h) => {
       if (!stillWanted()) return;
@@ -390,29 +412,30 @@ export class Renderer {
         }
         upload(src, w, h);
       };
+      img.onerror = () => { console.warn('[media] could not load', media.url); onFail(); };
       img.src = media.url;
       media.el = img;
     }
   }
 
   /** Stylise the photo once into a cached target (re-run only when the inputs change; every frame for video). */
-  #artPass(rt, media, style, amount) {
+  #artPass(media, style, amount) {
     const gl = this.gl;
     const maxSide = media.isVideo ? 960 : 1400;
     const k = Math.min(1, maxSide / Math.max(media.w, media.h, 1));
     const w = Math.max(8, Math.round(media.w * k)), h = Math.max(8, Math.round(media.h * k));
-    if (!rt.art) rt.art = new Target(gl, w, h);
-    else rt.art.resize(w, h);
+    if (!media.art) media.art = new Target(gl, w, h);
+    else media.art.resize(w, h);
     const key = `${media.url}|${style}|${amount.toFixed(3)}|${w}x${h}`;
-    if (rt.artKey === key && !media.isVideo) return rt.art.tex;
-    rt.artKey = key;
-    rt.art.bind();
+    if (media.artKey === key && !media.isVideo) return media.art.tex;
+    media.artKey = key;
+    media.art.bind();
     this.artProg.use().i('uSrc', 0).v2('uSize', w, h).i('uStyle', style).f('uAmount', amount).i('uMaxR', media.isVideo ? 3 : 8);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, media.tex);
     this.tri.draw();
     this.stats.artPasses++;
-    return rt.art.tex;
+    return media.art.tex;
   }
 
   #surfaceSize(s, W, H) {
@@ -440,33 +463,69 @@ export class Renderer {
 
     rt.hasBg = s.effect !== 'none';
     if (s.effect === 'media') {
-      const media = this.#media(rt, s.media);
-      if (media?.ready) {
-        const art = s.media.art || {};
-        const frame = s.media.frame || {};
+      const g = s.media.gallery || {};
+      const art = s.media.art || {};
+      const frame = s.media.frame || {};
+      let A = null, B = null, sched = null;
+      if (g.enabled && g.items?.length) {
+        const listKey = g.items.map((it) => it.url).join('|');
+        if (rt.galleryKey !== listKey) { rt.galleryKey = listKey; rt.failedUrls = new Set(); }
+        // Deleted / unreadable files are skipped instead of stalling the show.
+        const usable = g.items.filter((it) => !rt.failedUrls?.has(it.url));
+        if (usable.length) {
+          const elapsed = (this.now() - (g.startedAt || 0)) / 1000;
+          sched = gallerySchedule(elapsed, usable.length, g.seconds, g.transition === 'cut' ? 0 : g.transitionSeconds, g.shuffle, g.seed);
+          const ua = usable[sched.cur].url, ub = usable[sched.next].url;
+          A = this.#mediaEntry(rt, ua, 'image');
+          B = this.#mediaEntry(rt, ub, 'image'); // preloaded (and stylised) early in the slot
+          this.#pruneMedia(rt, new Set([ua, ub]));
+        } else {
+          this.#pruneMedia(rt, new Set());
+        }
+      } else {
+        A = this.#media(rt, s.media);
+      }
+      if (A?.ready) {
         const styleIdx = ART_STYLE_INDEX[art.style] || 0;
-        const tex = styleIdx > 0 ? this.#artPass(rt, media, styleIdx, Math.max(0, Math.min(1, art.amount ?? 0.6))) : media.tex;
-        // "Painting itself" runs on its own real-time clock, restarted when the photo or style
-        // changes or when the controller asks for a replay (paintRun).
-        const paintKey = `${media.url}|${art.style}|${!!art.paint}|${art.paintRun || 0}`;
-        if (rt.paintKey !== paintKey) { rt.paintKey = paintKey; rt.paintTime = 0; }
-        rt.paintTime += dt;
+        const amount = Math.max(0, Math.min(1, art.amount ?? 0.6));
+        const texA = styleIdx > 0 ? this.#artPass(A, styleIdx, amount) : A.tex;
+        let texB = texA, sizeB = [A.w, A.h], mix = 0, kb1 = [1, 0, 0], kb2 = [1, 0, 0], seed = 0;
+        if (sched) {
+          kb1 = kenBurns(sched.curSlot, sched.curProgress, g.kenBurns, g.seed);
+          if (B?.ready) {
+            texB = styleIdx > 0 ? this.#artPass(B, styleIdx, amount) : B.tex;
+            sizeB = [B.w, B.h];
+            mix = sched.mix;
+            kb2 = kenBurns(sched.nextSlot, sched.nextProgress, g.kenBurns, g.seed);
+          }
+          seed = (sched.nextSlot % 97) * 1.37; // a different brush pattern for every slide
+        }
+        // "Painting itself" (single photo only) runs on its own real-time clock, restarted when
+        // the photo or style changes or when the controller asks for a replay (paintRun).
         let paint = -1;
-        if (art.paint) {
-          const dur = Math.max(3, art.paintSeconds || 20);
-          const t = art.paintLoop ? rt.paintTime % (dur + 8) : rt.paintTime;
-          paint = Math.min(1.2, t / dur);
+        if (!sched) {
+          const paintKey = `${A.url}|${art.style}|${!!art.paint}|${art.paintRun || 0}`;
+          if (rt.paintKey !== paintKey) { rt.paintKey = paintKey; rt.paintTime = 0; }
+          rt.paintTime += dt;
+          if (art.paint) {
+            const dur = Math.max(3, art.paintSeconds || 20);
+            const t = art.paintLoop ? rt.paintTime % (dur + 8) : rt.paintTime;
+            paint = Math.min(1.2, t / dur);
+          }
         }
         const fi = FRAME_STYLE_INDEX[frame.style] || 0;
         rt.bg.bind();
         this.mediaProg.use()
-          .v2('uTexSize', media.w, media.h).f('uAspect', w / h)
-          .f('uFit', FIT[s.media.fit] ?? 0).f('uIntensity', prm.intensity ?? 1).f('uHue', prm.hue || 0).i('uTex', 0)
+          .v2('uTexSize', A.w, A.h).v2('uTexSize2', sizeB[0], sizeB[1]).f('uAspect', w / h)
+          .f('uFit', FIT[s.media.fit] ?? 0).f('uIntensity', prm.intensity ?? 1).f('uHue', prm.hue || 0).i('uTex', 0).i('uTex2', 1)
+          .v3('uKB1', kb1).v3('uKB2', kb2).f('uMix', mix).f('uSeed', seed).i('uTrans', g.transition === 'paint' ? 1 : 0)
           .i('uFrame', fi).f('uFrameW', frame.width ?? 0.07).f('uMatW', frame.mat ?? 0)
           .v3('uFrameColor', hexToRgb(frame.color || '#8a5a2b')).v3('uMatColor', hexToRgb(frame.matColor || '#eeeae0'))
           .f('uPaint', paint).f('uWeave', fi === 4 ? 1 : art.style === 'oil' ? 0.6 : 0);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, texB);
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.bindTexture(gl.TEXTURE_2D, texA);
         this.tri.draw();
       } else {
         rt.bg.bind();
@@ -474,7 +533,7 @@ export class Renderer {
         gl.clear(gl.COLOR_BUFFER_BIT);
       }
     } else {
-      if (rt.media) this.#disposeMedia(rt);
+      if (rt.medias?.size) this.#pruneMedia(rt, new Set());
       if (rt.hasBg) {
         const prog = s.effect === 'custom' ? this.#customProgram(s, rt) : this.effectProgram(s.effect);
         rt.bg.bind();
