@@ -368,34 +368,260 @@ export function effectFragmentSource(id) {
   return COMMON + body + MAIN;
 }
 
-// Shader that displays an image / video texture with cover/contain/stretch fit.
+const PHOTO_HELPERS = `
+float hash21(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+vec2 hash22(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz) * p3.zy); }
+float noise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3. - 2. * f);
+  return mix(mix(hash21(i), hash21(i + vec2(1, 0)), u.x), mix(hash21(i + vec2(0, 1)), hash21(i + vec2(1, 1)), u.x), u.y);
+}
+float fbm(vec2 p) {
+  float v = 0., a = .5;
+  mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
+  for (int i = 0; i < 5; i++) { v += a * noise(p); p = m * p; a *= .5; }
+  return v;
+}
+`;
+
+// One-off "stylise" pass. Output keeps the source texture's orientation (row 0 = top of the
+// photo) because it samples and writes at the same vUv, so the photo pass reads both alike.
+export const ART_FS = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 o;
+uniform sampler2D uSrc;
+uniform vec2 uSize;     // target size in pixels
+uniform int uStyle;     // 1 oil, 2 watercolour, 3 sketch, 4 pointillism
+uniform float uAmount;  // 0..1
+uniform int uMaxR;      // Kuwahara brush radius cap in pixels (lower for video)
+${PHOTO_HELPERS}
+vec3 src(vec2 uv) { return texture(uSrc, clamp(uv, 0., 1.)).rgb; }
+float lum(vec2 uv) { return dot(src(uv), vec3(0.299, 0.587, 0.114)); }
+float sobel(vec2 uv, float d) {
+  vec2 t = d / uSize;
+  float tl = lum(uv + vec2(-t.x, t.y)), tc = lum(uv + vec2(0., t.y)), tr = lum(uv + t);
+  float ml = lum(uv - vec2(t.x, 0.)), mr = lum(uv + vec2(t.x, 0.));
+  float bl = lum(uv - t), bc = lum(uv - vec2(0., t.y)), br = lum(uv + vec2(t.x, -t.y));
+  float gx = -tl - 2. * ml - bl + tr + 2. * mr + br;
+  float gy = -bl - 2. * bc - br + tl + 2. * tc + tr;
+  return length(vec2(gx, gy));
+}
+// Fixed 9x9 taps (81) whose spacing grows with the radius: a large brush costs the same
+// as a small one, so a slow TV GPU can't time out on a big photo.
+vec3 kuwahara(vec2 uv, float r) {
+  vec2 tx = (r / 4.) / uSize;
+  vec3 m0 = vec3(0.), m1 = vec3(0.), m2 = vec3(0.), m3 = vec3(0.);
+  vec3 s0 = vec3(0.), s1 = vec3(0.), s2 = vec3(0.), s3 = vec3(0.);
+  for (int j = -4; j <= 4; j++) {
+    for (int i = -4; i <= 4; i++) {
+      vec3 c = src(uv + vec2(float(i), float(j)) * tx);
+      vec3 c2 = c * c;
+      if (i <= 0 && j <= 0) { m0 += c; s0 += c2; }
+      if (i >= 0 && j <= 0) { m1 += c; s1 += c2; }
+      if (i <= 0 && j >= 0) { m2 += c; s2 += c2; }
+      if (i >= 0 && j >= 0) { m3 += c; s3 += c2; }
+    }
+  }
+  const float n = 25.;
+  m0 /= n; m1 /= n; m2 /= n; m3 /= n;
+  float v0 = dot(abs(s0 / n - m0 * m0), vec3(1.)), v1 = dot(abs(s1 / n - m1 * m1), vec3(1.));
+  float v2 = dot(abs(s2 / n - m2 * m2), vec3(1.)), v3 = dot(abs(s3 / n - m3 * m3), vec3(1.));
+  vec3 best = m0; float bv = v0;
+  if (v1 < bv) { best = m1; bv = v1; }
+  if (v2 < bv) { best = m2; bv = v2; }
+  if (v3 < bv) { best = m3; }
+  return best;
+}
+void main() {
+  float k = clamp(uAmount, 0., 1.);
+  float sc = uSize.y / 800.;
+  vec2 p = vUv * uSize;
+  vec3 c = src(vUv);
+  if (uStyle == 1) {
+    float r = min(float(uMaxR), 2. + k * 6. * max(sc, 0.5));
+    c = kuwahara(vUv, r);
+    float l = dot(c, vec3(0.299, 0.587, 0.114));
+    c = mix(vec3(l), c, 1.15 + 0.15 * k);
+  } else if (uStyle == 2) {
+    vec2 asp = vec2(uSize.x / uSize.y, 1.);
+    vec2 warp = (vec2(fbm(vUv * asp * 6.), fbm(vUv * asp * 6. + 3.7)) - 0.5) * 0.012 * k;
+    vec3 acc = vec3(0.);
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++)
+      acc += src(vUv + warp + vec2(float(i), float(j)) * (1. + k * 3.) * sc / uSize);
+    c = acc / 9.;
+    c = mix(c, floor(c * 5. + 0.5) / 5., 0.35 * k);
+    float e = sobel(vUv + warp, (1. + k * 2.) * max(sc, 0.5));
+    c *= 1. - clamp(e * 2., 0., 1.) * 0.55 * k;
+    c = mix(c, vec3(1.), 0.1 + 0.1 * k);
+    c *= 0.92 + 0.08 * fbm(p / (40. * sc));
+    c *= 0.95 + 0.05 * noise(p / (3. * sc));
+  } else if (uStyle == 3) {
+    float l = 0.;
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) l += lum(vUv + vec2(float(i), float(j)) * sc / uSize);
+    l /= 9.;
+    float sp = (6. + (1. - k) * 3.) * max(sc, 0.5);
+    float w = 1.1 * max(sc, 0.5);
+    float h1 = 1. - smoothstep(w * 0.5, w * 0.5 + 1., abs(fract((p.x + p.y) / (sp * 1.4)) - 0.5) * sp * 1.4);
+    float h2 = 1. - smoothstep(w * 0.5, w * 0.5 + 1., abs(fract((p.x - p.y) / (sp * 1.4)) - 0.5) * sp * 1.4);
+    float h3 = 1. - smoothstep(w * 0.5, w * 0.5 + 1., abs(fract(p.y / sp) - 0.5) * sp);
+    float hatch = max(h1 * (1. - smoothstep(0.5, 0.72, l)), max(h2 * (1. - smoothstep(0.3, 0.48, l)), h3 * (1. - smoothstep(0.12, 0.26, l))));
+    float e = smoothstep(0.08, 0.35, sobel(vUv, 1.5 * max(sc, 0.5)));
+    float ink = clamp(max(e, hatch * 0.85), 0., 1.) * (0.75 + 0.25 * noise(p * 0.5));
+    vec3 paper = vec3(0.96, 0.95, 0.92) * (0.95 + 0.05 * fbm(p / (30. * sc)));
+    c = mix(paper, vec3(0.22, 0.22, 0.26), ink * (0.6 + 0.4 * k));
+  } else if (uStyle == 4) {
+    float cell = (5. + k * 9.) * max(sc, 0.4);
+    vec3 col = vec3(0.95, 0.93, 0.88);
+    for (int layer = 0; layer < 2; layer++) {
+      vec2 off = vec2(float(layer) * cell * 0.5);
+      vec2 id = floor((p + off) / cell);
+      for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+        vec2 cid = id + vec2(float(i), float(j));
+        vec2 ctr = (cid + 0.5 + (hash22(cid + float(layer) * 17.) - 0.5) * 0.7) * cell - off;
+        vec3 cc = src(ctr / uSize);
+        float cl = dot(cc, vec3(0.299, 0.587, 0.114));
+        cc = clamp(mix(vec3(cl), cc, 1.45), 0., 1.);
+        float r = cell * (0.42 + 0.12 * hash21(cid + 3.));
+        float a = smoothstep(r, r - 1.2, length(p - ctr));
+        col = mix(col, cc, a * 0.9);
+      }
+    }
+    c = col;
+  }
+  o = vec4(clamp(c, 0., 1.), 1.);
+}`;
+
+// Photo / video pass: fit, frame, mat, canvas texture and the "painting itself" reveal.
+// Frame and mat widths are fractions of the surface's shorter side, using the surface's true
+// aspect (uAspect), not the render target's, so the frame is equally thick on every side.
 export const MEDIA_FS = `#version 300 es
 precision highp float;
 in vec2 vUv;
 out vec4 outColor;
 uniform sampler2D uTex;
-uniform vec2 uRes, uTexSize;
-uniform float uFit, uIntensity, uHue;
-${'' /* hue helper */}
+uniform vec2 uTexSize;
+uniform float uAspect, uFit, uIntensity, uHue, uFrameW, uMatW, uPaint, uWeave;
+uniform int uFrame; // 0 none, 1 wood, 2 gold, 3 gallery, 4 canvas, 5 polaroid
+uniform vec3 uFrameColor, uMatColor;
+${PHOTO_HELPERS}
 vec3 hueShift(vec3 c, float h) {
   const vec3 k = vec3(0.57735);
   float ca = cos(h * 6.28318531);
   return c * ca + cross(k, c) * sin(h * 6.28318531) + k * dot(k, c) * (1. - ca);
 }
-void main() {
-  vec2 uv = vUv;
-  float ra = uRes.x / max(uRes.y, 1.);
+const vec2 LIGHT = vec2(-0.7071, 0.7071); // from the top-left
+vec3 photoAt(vec2 puv, vec2 area) {
+  float ra = area.x / max(area.y, 1e-5);
   float ta = uTexSize.x / max(uTexSize.y, 1.);
   vec2 s = vec2(1.);
-  if (uFit < 0.5) { // cover
-    s = ra > ta ? vec2(1., ta / ra) : vec2(ra / ta, 1.);
-  } else if (uFit < 1.5) { // contain
-    s = ra > ta ? vec2(ra / ta, 1.) : vec2(1., ta / ra);
+  if (uFit < 0.5) s = ra > ta ? vec2(1., ta / ra) : vec2(ra / ta, 1.);
+  else if (uFit < 1.5) s = ra > ta ? vec2(ra / ta, 1.) : vec2(1., ta / ra);
+  vec2 uv = (puv - 0.5) * s + 0.5;
+  if (uv.x < 0. || uv.x > 1. || uv.y < 0. || uv.y > 1.) return vec3(-1.); // letterbox
+  return texture(uTex, vec2(uv.x, 1. - uv.y)).rgb;
+}
+float mirror1(float x) { return x < 0. ? -x : (x > 1. ? 2. - x : x); }
+
+vec3 frameColor(float along, float across, vec2 dir, float seed) {
+  float lit = dot(-dir, LIGHT);
+  vec3 c = uFrameColor;
+  if (uFrame == 1) { // wood: grain runs along each side, rounded profile, inner lip
+    float g = fbm(vec2(along * 3., across * 2. + seed * 7.));
+    float grain = 0.5 + 0.5 * sin((across * 9. + g * 5. + along * 0.4) * 6.2831);
+    float fine = noise(vec2(along * 120., across * 6. + seed * 3.));
+    c *= mix(0.7, 1.12, grain) * (0.92 + 0.12 * fine);
+    c *= 0.85 + 0.45 * lit * cos(across * 3.14159);
+    c += uFrameColor * 0.25 * smoothstep(0.84, 0.93, across) * (1. - smoothstep(0.93, 1., across));
+    c *= smoothstep(0., 0.05, across) * 0.6 + 0.4;
+  } else if (uFrame == 2) { // gold: three ridges, beading, specular
+    float slope = cos(across * 9.42478);
+    float l = lit * slope;
+    vec3 base = c * (0.5 + 0.6 * (0.5 + 0.5 * l));
+    float bead = 0.5 + 0.5 * sin(along * 95.);
+    float beadMask = smoothstep(0.36, 0.4, across) * (1. - smoothstep(0.6, 0.64, across));
+    base *= mix(1., 0.7 + 0.55 * bead, beadMask);
+    base += vec3(1., 0.93, 0.7) * pow(max(l, 0.), 6.) * 0.8;
+    base *= 0.94 + 0.08 * fbm(vec2(along, across) * 25. + seed);
+    c = base * (smoothstep(0., 0.04, across) * 0.5 + 0.5);
+  } else if (uFrame == 3) { // gallery: flat, slight sheen
+    c *= 0.9 + 0.3 * lit * cos(across * 3.14159) + 0.08 * fbm(vec2(along * 8., across));
+  } else if (uFrame == 5) { // polaroid paper
+    c *= 0.96 + 0.04 * fbm(vec2(along, across) * 40. + seed);
+    c *= 1. - 0.12 * smoothstep(0.82, 1., across);
   }
-  uv = (uv - 0.5) * s + 0.5;
-  vec3 col = vec3(0.);
-  if (uv.x >= 0. && uv.x <= 1. && uv.y >= 0. && uv.y <= 1.) col = texture(uTex, vec2(uv.x, 1. - uv.y)).rgb;
-  outColor = vec4(hueShift(col, uHue) * uIntensity, 1.);
+  return c;
+}
+
+void main() {
+  vec2 size = uAspect >= 1. ? vec2(uAspect, 1.) : vec2(1., 1. / uAspect);
+  vec2 q = vUv * size;
+  // Fine textures (canvas threads, mat paper) fade out when they'd be under ~3 px, e.g. on a
+  // small preview, instead of aliasing into moiré.
+  float fine = 1. - smoothstep(0.08, 0.16, fwidth(q.x) * 380. / 6.2831);
+  float fw = uFrame == 0 ? 0. : uFrameW;
+  vec4 b = vec4(fw); // left, right, bottom, top
+  if (uFrame == 5) b.z = fw * 3.2;
+  float mw = (uFrame >= 1 && uFrame <= 3) ? uMatW : 0.;
+  vec2 pmin = vec2(b.x + mw, b.z + mw);
+  vec2 pmax = size - vec2(b.y + mw, b.w + mw);
+  vec2 area = max(pmax - pmin, vec2(1e-4));
+  vec2 puv = (q - pmin) / area;
+
+  float rl = q.x / max(b.x, 1e-5), rr = (size.x - q.x) / max(b.y, 1e-5);
+  float rb = q.y / max(b.z, 1e-5), rt = (size.y - q.y) / max(b.w, 1e-5);
+  float rmin = min(min(rl, rr), min(rb, rt));
+  bool inPhoto = q.x >= pmin.x && q.x <= pmax.x && q.y >= pmin.y && q.y <= pmax.y;
+  vec3 col;
+
+  if (fw > 0. && rmin < 1.) {
+    float along; vec2 dir; float seed; float sideShade;
+    if (rmin == rl)      { along = q.y; dir = vec2(1., 0.);  seed = 1.; sideShade = 0.62; }
+    else if (rmin == rr) { along = q.y; dir = vec2(-1., 0.); seed = 2.; sideShade = 0.42; }
+    else if (rmin == rb) { along = q.x; dir = vec2(0., 1.);  seed = 3.; sideShade = 0.38; }
+    else                 { along = q.x; dir = vec2(0., -1.); seed = 4.; sideShade = 0.75; }
+    if (uFrame == 4) { // stretched canvas: the photo wraps around the sides
+      vec3 c = photoAt(vec2(mirror1(puv.x), mirror1(puv.y)), area);
+      if (c.x < 0.) c = vec3(0.);
+      col = c * sideShade * mix(0.75, 1., rmin) * (1. - 0.5 * smoothstep(0.9, 1., rmin));
+    } else {
+      col = frameColor(along, rmin, dir, seed);
+    }
+  } else if (!inPhoto) { // mat (passe-partout) with a bevelled inner cut
+    col = uMatColor * (0.97 + 0.03 * noise(q * 300.) * fine);
+    float dIn = max(max(pmin.x - q.x, q.x - pmax.x), max(pmin.y - q.y, q.y - pmax.y));
+    float bevel = 0.006;
+    if (dIn < bevel) {
+      vec2 n = (pmin.x - q.x) == dIn ? vec2(1., 0.) : (q.x - pmax.x) == dIn ? vec2(-1., 0.) : (pmin.y - q.y) == dIn ? vec2(0., 1.) : vec2(0., -1.);
+      col = vec3(0.97) * (0.88 + 0.2 * dot(-n, LIGHT));
+    }
+    float dOut = min(min(q.x - b.x, size.x - b.y - q.x), min(q.y - b.z, size.y - b.w - q.y));
+    col *= 1. - 0.25 * exp(-max(dOut, 0.) / 0.012) * (fw > 0. ? 1. : 0.);
+  } else {
+    vec3 c = photoAt(puv, area);
+    if (c.x < 0.) c = (fw > 0. || mw > 0.) ? uMatColor : vec3(0.); // letterbox bars take the mat colour inside a frame
+    if (fw > 0. && mw <= 0. && uFrame != 4) {
+      float dTop = (pmax.y - q.y), dLeft = (q.x - pmin.x);
+      c *= (1. - 0.3 * exp(-dTop / 0.012)) * (1. - 0.22 * exp(-dLeft / 0.012));
+    }
+    if (uPaint >= 0.) {
+      // Brush strokes follow a smooth direction field (no per-cell blocks); large regions are
+      // blocked in first, and the order is spread over 0..1 so the painting fills in evenly.
+      vec2 sp = puv * vec2(area.x / area.y, 1.);
+      float a = fbm(sp * 1.3 + 7.1) * 6.2831;
+      vec2 r = mat2(cos(a), sin(a), -sin(a), cos(a)) * sp;
+      float stroke = noise(r * vec2(22., 4.)) * 0.6 + noise(r * vec2(45., 8.)) * 0.4;
+      float order = smoothstep(0.26, 0.74, 0.6 * fbm(sp * 1.8 + 3.1) + 0.4 * stroke);
+      float reveal = smoothstep(order - 0.04, order + 0.04, uPaint * 1.1 - 0.05);
+      c = mix(vec3(0.93, 0.91, 0.86), c, reveal);
+    }
+    col = c;
+  }
+  // Canvas threads only on the painted surface (and the wrapped sides of a stretched canvas),
+  // never on the mat or a wooden / gold frame.
+  bool woven = inPhoto || (uFrame == 4 && fw > 0. && rmin < 1.);
+  if (uWeave > 0. && woven) col *= 1. - uWeave * fine * 0.1 * (0.5 + 0.5 * sin(q.x * 380.) * sin(q.y * 380.));
+  outColor = vec4(max(hueShift(col, uHue) * uIntensity, 0.), 1.);
 }`;
 
 // ---------- user-written effects ----------

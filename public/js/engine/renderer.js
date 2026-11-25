@@ -7,10 +7,10 @@
 //  3. The final pass warps the scene through the global keystone, applies protection
 //     masks, edge blending, colour correction, flips and master fades.
 import { Program, Target, FULLSCREEN_VS, createFullscreenTriangle, hexToRgb } from './gl.js';
-import { effectFragmentSource, MEDIA_FS, EFFECT_GLSL, customFragmentSource, parseShaderErrors, hashString } from './effects-glsl.js';
+import { effectFragmentSource, MEDIA_FS, ART_FS, EFFECT_GLSL, customFragmentSource, parseShaderErrors, hashString } from './effects-glsl.js';
 import { ParticleSystem } from './particles.js';
 import { squareToQuad, invert3, toGL } from '../core/homography.js';
-import { PARTICLE_MODE_INDEX, normalizeState } from '../core/catalog.js';
+import { PARTICLE_MODE_INDEX, normalizeState, FRAME_STYLE_INDEX, ART_STYLE_INDEX } from '../core/catalog.js';
 
 const COMPOSE_FS = `#version 300 es
 precision highp float;
@@ -129,6 +129,9 @@ export class Renderer {
     this.final = new Program(gl, FULLSCREEN_VS, FINAL_FS, null, 'final');
     this.solid = new Program(gl, FULLSCREEN_VS, SOLID_FS, null, 'solid');
     this.mediaProg = new Program(gl, FULLSCREEN_VS, MEDIA_FS, null, 'media');
+    this.artProg = new Program(gl, FULLSCREEN_VS, ART_FS, null, 'art');
+    this.maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
+    this.stats = { artPasses: 0 };
     this.scene = new Target(gl, 2, 2);
     this.snap = new Target(gl, 2, 2);
     this.runtimes = new Map();
@@ -303,6 +306,9 @@ export class Renderer {
     if (rt.media.el instanceof HTMLVideoElement) { rt.media.el.pause(); rt.media.el.removeAttribute('src'); rt.media.el.load(); }
     this.gl.deleteTexture(rt.media.tex);
     rt.media = null;
+    rt.art?.dispose();
+    rt.art = null;
+    rt.artKey = null;
   }
 
   #media(rt, m) {
@@ -322,15 +328,7 @@ export class Renderer {
         v.play().catch(() => {});
         media.el = v;
       } else {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          gl.bindTexture(gl.TEXTURE_2D, media.tex);
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-          media.ready = true; media.w = img.naturalWidth; media.h = img.naturalHeight;
-        };
-        img.src = m.url;
-        media.el = img;
+        this.#loadImage(media, () => rt.media === media);
       }
       rt.media = media;
     }
@@ -346,6 +344,75 @@ export class Renderer {
       }
     }
     return media;
+  }
+
+  /**
+   * Decode a photo honouring its EXIF orientation (phone pictures) and shrink it to fit the
+   * GPU's texture limit. Falls back to a plain <img> on browsers without these options.
+   */
+  async #loadImage(media, stillWanted) {
+    const gl = this.gl;
+    const upload = (src, w, h) => {
+      if (!stillWanted()) return;
+      gl.bindTexture(gl.TEXTURE_2D, media.tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+      gl.generateMipmap(gl.TEXTURE_2D); // photos are usually far larger than the surface
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      media.w = w; media.h = h; media.ready = true;
+    };
+    const max = Math.min(this.maxTex, 4096);
+    try {
+      const res = await fetch(media.url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      let bmp = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+      if (Math.max(bmp.width, bmp.height) > max) {
+        const k = max / Math.max(bmp.width, bmp.height);
+        const small = await createImageBitmap(bmp, { resizeWidth: Math.round(bmp.width * k), resizeHeight: Math.round(bmp.height * k), resizeQuality: 'high' });
+        bmp.close();
+        bmp = small;
+      }
+      upload(bmp, bmp.width, bmp.height);
+      bmp.close();
+    } catch (e) {
+      console.warn('[media] createImageBitmap path failed, using <img>:', e.message);
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        let src = img, w = img.naturalWidth, h = img.naturalHeight;
+        if (Math.max(w, h) > max) {
+          const k = max / Math.max(w, h);
+          const c = document.createElement('canvas');
+          c.width = Math.round(w * k); c.height = Math.round(h * k);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          src = c; w = c.width; h = c.height;
+        }
+        upload(src, w, h);
+      };
+      img.src = media.url;
+      media.el = img;
+    }
+  }
+
+  /** Stylise the photo once into a cached target (re-run only when the inputs change; every frame for video). */
+  #artPass(rt, media, style, amount) {
+    const gl = this.gl;
+    const maxSide = media.isVideo ? 960 : 1400;
+    const k = Math.min(1, maxSide / Math.max(media.w, media.h, 1));
+    const w = Math.max(8, Math.round(media.w * k)), h = Math.max(8, Math.round(media.h * k));
+    if (!rt.art) rt.art = new Target(gl, w, h);
+    else rt.art.resize(w, h);
+    const key = `${media.url}|${style}|${amount.toFixed(3)}|${w}x${h}`;
+    if (rt.artKey === key && !media.isVideo) return rt.art.tex;
+    rt.artKey = key;
+    rt.art.bind();
+    this.artProg.use().i('uSrc', 0).v2('uSize', w, h).i('uStyle', style).f('uAmount', amount).i('uMaxR', media.isVideo ? 3 : 8);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, media.tex);
+    this.tri.draw();
+    this.stats.artPasses++;
+    return rt.art.tex;
   }
 
   #surfaceSize(s, W, H) {
@@ -374,15 +441,35 @@ export class Renderer {
     rt.hasBg = s.effect !== 'none';
     if (s.effect === 'media') {
       const media = this.#media(rt, s.media);
-      rt.bg.bind();
       if (media?.ready) {
+        const art = s.media.art || {};
+        const frame = s.media.frame || {};
+        const styleIdx = ART_STYLE_INDEX[art.style] || 0;
+        const tex = styleIdx > 0 ? this.#artPass(rt, media, styleIdx, Math.max(0, Math.min(1, art.amount ?? 0.6))) : media.tex;
+        // "Painting itself" runs on its own real-time clock, restarted when the photo or style
+        // changes or when the controller asks for a replay (paintRun).
+        const paintKey = `${media.url}|${art.style}|${!!art.paint}|${art.paintRun || 0}`;
+        if (rt.paintKey !== paintKey) { rt.paintKey = paintKey; rt.paintTime = 0; }
+        rt.paintTime += dt;
+        let paint = -1;
+        if (art.paint) {
+          const dur = Math.max(3, art.paintSeconds || 20);
+          const t = art.paintLoop ? rt.paintTime % (dur + 8) : rt.paintTime;
+          paint = Math.min(1.2, t / dur);
+        }
+        const fi = FRAME_STYLE_INDEX[frame.style] || 0;
+        rt.bg.bind();
         this.mediaProg.use()
-          .v2('uRes', rt.bg.w, rt.bg.h).v2('uTexSize', media.w, media.h)
-          .f('uFit', FIT[s.media.fit] ?? 0).f('uIntensity', prm.intensity ?? 1).f('uHue', prm.hue || 0).i('uTex', 0);
+          .v2('uTexSize', media.w, media.h).f('uAspect', w / h)
+          .f('uFit', FIT[s.media.fit] ?? 0).f('uIntensity', prm.intensity ?? 1).f('uHue', prm.hue || 0).i('uTex', 0)
+          .i('uFrame', fi).f('uFrameW', frame.width ?? 0.07).f('uMatW', frame.mat ?? 0)
+          .v3('uFrameColor', hexToRgb(frame.color || '#8a5a2b')).v3('uMatColor', hexToRgb(frame.matColor || '#eeeae0'))
+          .f('uPaint', paint).f('uWeave', fi === 4 ? 1 : art.style === 'oil' ? 0.6 : 0);
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, media.tex);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
         this.tri.draw();
       } else {
+        rt.bg.bind();
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
       }

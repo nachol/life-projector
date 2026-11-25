@@ -3,6 +3,7 @@ import { t, lang } from '../core/i18n.js';
 import {
   EFFECTS, PARTICLES, PALETTES, localized, defaultSurface, defaultEffectParams, defaultParticles,
   defaultMask, defaultOutput, uid, sceneFromState, customForSurface,
+  FRAME_STYLES, ART_STYLES, normalizeMedia,
 } from '../core/catalog.js';
 import { thumb } from './thumbs.js';
 import { api } from '../core/net.js';
@@ -222,7 +223,67 @@ function mediaControls(app, sf, set) {
       }, '🗑')))),
     h('div', { class: 'row' }, h('span', { class: 'muted' }, t('fit')),
       h('div', { class: 'grow' }, select([['cover', t('fit_cover')], ['contain', t('fit_contain')], ['stretch', t('fit_stretch')]], sf.media.fit, (v) => set((s) => { s.media.fit = v; })))),
+    ...photoStyleControls(sf, set),
   ];
+}
+
+function photoStyleControls(sf, set) {
+  const m = normalizeMedia(sf.media);
+  const fr = m.frame;
+  const art = m.art;
+  const setFrame = (fn, opts) => set((s) => { s.media = normalizeMedia(s.media); fn(s.media.frame); }, opts);
+  const setArt = (fn, opts) => set((s) => { s.media = normalizeMedia(s.media); fn(s.media.art); }, opts);
+  const out = [
+    h('h3', {}, t('frame')),
+    h('div', { class: 'chips' }, Object.entries(FRAME_STYLES).map(([id, f]) => h('button', {
+      type: 'button', class: `chip${fr.style === id ? ' active' : ''}`,
+      onclick: () => setFrame((x) => {
+        x.style = id;
+        if (f.color) x.color = f.color;
+        if (f.width) x.width = f.width;
+        if (f.mat !== undefined) x.mat = f.mat;
+      }),
+    }, L(f.name)))),
+  ];
+  if (fr.style !== 'none') {
+    out.push(slider(fr.style === 'canvas' ? t('canvas_depth') : t('frame_width'), fr.width, {
+      min: 0.01, max: 0.25, step: 0.005, onInput: (v) => setFrame((x) => { x.width = v; }, { panels: false }),
+    }));
+    if (fr.style !== 'canvas') {
+      const color = h('input', { type: 'color', value: fr.color });
+      color.addEventListener('input', () => setFrame((x) => { x.color = color.value; }, { panels: false }));
+      out.push(h('div', { class: 'row' }, h('span', { class: 'muted' }, t('frame_color')), color));
+    }
+    if (['wood', 'gold', 'gallery'].includes(fr.style)) {
+      const matColor = h('input', { type: 'color', value: fr.matColor });
+      matColor.addEventListener('input', () => setFrame((x) => { x.matColor = matColor.value; }, { panels: false }));
+      out.push(
+        slider(t('mat_width'), fr.mat, { min: 0, max: 0.25, step: 0.005, onInput: (v) => setFrame((x) => { x.mat = v; }, { panels: false }) }),
+        h('div', { class: 'row' }, h('span', { class: 'muted' }, t('mat_color')), matColor),
+      );
+    }
+    out.push(h('p', { class: 'muted small' }, t('frame_hint')));
+  }
+  out.push(
+    h('h3', {}, t('art_style')),
+    h('div', { class: 'chips' }, Object.entries(ART_STYLES).map(([id, a]) => h('button', {
+      type: 'button', class: `chip${art.style === id ? ' active' : ''}`,
+      onclick: () => setArt((x) => { x.style = id; }),
+    }, L(a.name)))),
+  );
+  if (art.style !== 'none') {
+    out.push(slider(t('art_amount'), art.amount, { onInput: (v) => setArt((x) => { x.amount = v; }, { panels: false }) }));
+  }
+  out.push(h('div', { class: 'row' }, checkbox(t('paint_in'), art.paint, (v) => setArt((x) => { x.paint = v; x.paintRun = (x.paintRun || 0) + 1; }))));
+  if (art.paint) {
+    out.push(
+      slider(t('paint_seconds'), art.paintSeconds, { min: 3, max: 120, step: 1, format: (v) => `${Math.round(v)} s`, onInput: (v) => setArt((x) => { x.paintSeconds = v; }, { panels: false }) }),
+      h('div', { class: 'row' },
+        checkbox(t('paint_loop'), art.paintLoop, (v) => setArt((x) => { x.paintLoop = v; })),
+        h('button', { type: 'button', class: 'btn small', onclick: () => setArt((x) => { x.paintRun = (x.paintRun || 0) + 1; }) }, '↺ ' + t('paint_replay'))),
+    );
+  }
+  return out;
 }
 
 function uploadWithProgress(file, onProgress) {

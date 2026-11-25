@@ -120,6 +120,44 @@ export function defaultParticles(mode = 'none') {
   };
 }
 
+// ---------- Photo frames & artistic styles (for the media effect) ----------
+export const FRAME_STYLES = {
+  none:     { name: { es: 'Sin marco', en: 'No frame' } },
+  wood:     { name: { es: 'Madera', en: 'Wood' }, color: '#8a5a2b', width: 0.07, mat: 0.05 },
+  gold:     { name: { es: 'Dorado clásico', en: 'Classic gold' }, color: '#c9a227', width: 0.09, mat: 0.06 },
+  gallery:  { name: { es: 'Galería (fino)', en: 'Gallery (thin)' }, color: '#1a1a1a', width: 0.025, mat: 0.12 },
+  canvas:   { name: { es: 'Bastidor / lienzo', en: 'Stretched canvas' }, color: '#000000', width: 0.05, mat: 0 },
+  polaroid: { name: { es: 'Polaroid', en: 'Polaroid' }, color: '#f4f2ec', width: 0.06, mat: 0 },
+};
+export const FRAME_STYLE_INDEX = Object.fromEntries(Object.keys(FRAME_STYLES).map((k, i) => [k, i]));
+
+export const ART_STYLES = {
+  none:        { name: { es: 'Foto original', en: 'Original photo' } },
+  oil:         { name: { es: 'Óleo', en: 'Oil painting' } },
+  watercolor:  { name: { es: 'Acuarela', en: 'Watercolour' } },
+  sketch:      { name: { es: 'Lápiz', en: 'Pencil sketch' } },
+  pointillism: { name: { es: 'Puntillismo', en: 'Pointillism' } },
+};
+export const ART_STYLE_INDEX = Object.fromEntries(Object.keys(ART_STYLES).map((k, i) => [k, i]));
+
+export function defaultMedia() {
+  return {
+    url: '', type: '', fit: 'cover', loop: true, muted: true,
+    frame: { style: 'none', width: 0.07, color: '#8a5a2b', mat: 0.05, matColor: '#eeeae0' },
+    art: { style: 'none', amount: 0.6, paint: false, paintSeconds: 20, paintLoop: false, paintRun: 0 },
+  };
+}
+
+/** Fill in fields added after a state / scene was saved. */
+export function normalizeMedia(m) {
+  const d = defaultMedia();
+  const src = m && typeof m === 'object' ? m : {};
+  const out = { ...d, ...src, frame: { ...d.frame, ...(src.frame || {}) }, art: { ...d.art, ...(src.art || {}) } };
+  if (!FRAME_STYLES[out.frame.style]) out.frame.style = 'none';
+  if (!ART_STYLES[out.art.style]) out.art.style = 'none';
+  return out;
+}
+
 export function defaultSurface(name = 'Superficie 1', corners) {
   return {
     id: uid('srf'),
@@ -129,7 +167,7 @@ export function defaultSurface(name = 'Superficie 1', corners) {
     effect: 'aurora',
     params: defaultEffectParams('aurora'),
     particles: defaultParticles('none'),
-    media: { url: '', type: '', fit: 'cover', loop: true, muted: true },
+    media: defaultMedia(),
     opacity: 1,
     feather: 0,
     blend: 'normal',
@@ -285,7 +323,7 @@ export function normalizeState(s) {
       ...d, ...x,
       params: { ...defaultEffectParams(x.effect), ...(x.params || {}) },
       particles: { ...defaultParticles((x.particles || {}).mode || 'none'), ...(x.particles || {}) },
-      media: { ...d.media, ...(x.media || {}) },
+      media: normalizeMedia(x.media),
     };
   }) : base.surfaces;
   out.masks = Array.isArray(s.masks) ? s.masks : [];
