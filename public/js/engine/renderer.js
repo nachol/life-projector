@@ -7,7 +7,7 @@
 //  3. The final pass warps the scene through the global keystone, applies protection
 //     masks, edge blending, colour correction, flips and master fades.
 import { Program, Target, FULLSCREEN_VS, createFullscreenTriangle, hexToRgb } from './gl.js';
-import { effectFragmentSource, MEDIA_FS, EFFECT_GLSL } from './effects-glsl.js';
+import { effectFragmentSource, MEDIA_FS, EFFECT_GLSL, customFragmentSource, parseShaderErrors, hashString } from './effects-glsl.js';
 import { ParticleSystem } from './particles.js';
 import { squareToQuad, invert3, toGL } from '../core/homography.js';
 import { PARTICLE_MODE_INDEX, normalizeState } from '../core/catalog.js';
@@ -149,6 +149,8 @@ export class Renderer {
     this.highFpsTime = 0;
     this.lost = false;
     this.errors = new Set();
+    this.customErrors = new Map(); // custom effect id -> [{line, message}]
+    this.usedCustom = new Set();
     canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.lost = true; });
     canvas.addEventListener('webglcontextrestored', () => this.opts.onContextRestored?.());
   }
@@ -180,6 +182,55 @@ export class Renderer {
     return p;
   }
 
+  /** Compile a user-written effect. Returns { ok, errors, key }. Successful programs stay cached. */
+  compileCustom(glsl) {
+    const key = `custom:${hashString(String(glsl))}`;
+    const cached = this.effectProgs.get(key);
+    if (cached) return { ok: true, errors: [], key };
+    if (cached === null) return { ok: false, errors: this.failedLogs?.get(key) || [], key };
+    try {
+      const p = new Program(this.gl, FULLSCREEN_VS, customFragmentSource(glsl), null, 'custom', { quiet: true });
+      this.effectProgs.set(key, p);
+      return { ok: true, errors: [], key };
+    } catch (e) {
+      const errors = parseShaderErrors(e.log || e.message, glsl);
+      this.effectProgs.set(key, null);
+      (this.failedLogs ||= new Map()).set(key, errors);
+      return { ok: false, errors, key };
+    }
+  }
+
+  #customProgram(s, rt) {
+    const c = s.custom;
+    if (!c?.glsl) return null;
+    const res = this.compileCustom(c.glsl);
+    if (res.ok) {
+      rt.lastGoodKey = res.key;
+      this.customErrors.delete(c.id);
+    } else {
+      this.customErrors.set(c.id, { name: c.name, errors: res.errors });
+    }
+    // On a broken edit keep showing the last shader that worked on this surface.
+    this.usedCustom.add(res.key); // keep failures cached too, or they'd recompile every frame
+    const key = res.ok ? res.key : rt.lastGoodKey;
+    if (!key) return null;
+    this.usedCustom.add(key);
+    return this.effectProgs.get(key) || null;
+  }
+
+  /** Free custom programs no surface uses any more (live editing would otherwise leak one per edit). */
+  #evictCustom() {
+    const keep = new Set(this.usedCustom);
+    for (const rt of this.runtimes.values()) if (rt.lastGoodKey) keep.add(rt.lastGoodKey);
+    for (const [key, p] of this.effectProgs) {
+      if (!key.startsWith('custom:') || keep.has(key)) continue;
+      p?.dispose();
+      this.effectProgs.delete(key);
+      this.failedLogs?.delete(key);
+    }
+    this.usedCustom.clear();
+  }
+
   /** Compile every effect up-front (used by tests and the thumbnail generator). */
   compileAll() {
     for (const id of Object.keys(EFFECT_GLSL)) this.effectProgram(id);
@@ -188,7 +239,8 @@ export class Renderer {
 
   setState(state) {
     this.state = normalizeState(state);
-    const sig = this.state.surfaces.map((s) => `${s.effect}|${s.particles.mode}|${s.media?.url}`).join(',') + `#${this.state.sceneId}`;
+    // custom.id (not the code) so live shader editing doesn't trigger a crossfade on every keystroke
+    const sig = this.state.surfaces.map((s) => `${s.effect}${s.effect === 'custom' ? ':' + s.custom?.id : ''}|${s.particles.mode}|${s.media?.url}`).join(',') + `#${this.state.sceneId}`;
     if (this.opts.transitions && this.signature !== null && sig !== this.signature && this.scene.w > 2) {
       this.#snapshot();
       this.snapMix = 1;
@@ -337,7 +389,7 @@ export class Renderer {
     } else {
       if (rt.media) this.#disposeMedia(rt);
       if (rt.hasBg) {
-        const prog = this.effectProgram(s.effect);
+        const prog = s.effect === 'custom' ? this.#customProgram(s, rt) : this.effectProgram(s.effect);
         rt.bg.bind();
         if (prog) {
           prog.use()
@@ -480,6 +532,10 @@ export class Renderer {
       drawn.push([s, this.#renderSurface(s, dt, W, H, audio)]);
     }
     for (const [id, rt] of this.runtimes) if (!alive.has(id)) { this.#disposeRuntime(rt); this.runtimes.delete(id); }
+    if (this.usedCustom.size || this.failedLogs?.size) this.#evictCustom();
+    for (const id of this.customErrors.keys()) {
+      if (!st.surfaces.some((s) => s.effect === 'custom' && s.custom?.id === id)) this.customErrors.delete(id);
+    }
 
     // 2. compose
     this.scene.bind();

@@ -11,7 +11,7 @@ import QRCode from 'qrcode';
 import selfsigned from 'selfsigned';
 import { Store, isValidId, isAllowedMedia, safeMediaName, mediaKind } from './store.js';
 import { Hub } from './hub.js';
-import { PRESET_SCENES } from '../public/js/core/catalog.js';
+import { PRESET_SCENES, sanitizeCustomEffect } from '../public/js/core/catalog.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -117,6 +117,24 @@ app.put('/api/scenes/:id', express.json({ limit: '4mb' }), (req, res) => {
 app.delete('/api/scenes/:id', asyncRoute(async (req, res) => {
   if (!isValidId(req.params.id)) return res.status(400).end();
   await store.deleteScene(req.params.id);
+  res.json({ ok: true });
+}));
+
+// Custom effects library (user-written GLSL). The shader itself is also embedded in each
+// surface that uses it, so displays never need to fetch this.
+app.get('/api/effects', asyncRoute(async (req, res) => res.json(await store.listEffects())));
+app.put('/api/effects/:id', express.json({ limit: '256kb' }), (req, res) => {
+  const { id } = req.params;
+  if (!isValidId(id)) return res.status(400).json({ error: 'bad id' });
+  const fx = sanitizeCustomEffect({ ...(req.body || {}), id });
+  if (!fx) return res.status(400).json({ error: 'invalid effect' });
+  const thumb = typeof req.body?.thumb === 'string' && /^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(req.body.thumb) && req.body.thumb.length < 150000
+    ? req.body.thumb : null;
+  res.json(store.saveEffect(id, { ...fx, thumb }));
+});
+app.delete('/api/effects/:id', asyncRoute(async (req, res) => {
+  if (!isValidId(req.params.id)) return res.status(400).end();
+  await store.deleteEffect(req.params.id);
   res.json({ ok: true });
 }));
 

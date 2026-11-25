@@ -50,3 +50,35 @@ test('normalizeState repairs partial input', () => {
   assert.equal(s.output.edgeBlend.gamma, 2.2);
   assert.ok(Array.isArray(s.masks));
 });
+
+test('content mode carries custom shaders and drops stale ones', () => {
+  const st = defaultState();
+  const custom = { id: 'fx1', name: 'Mine', glsl: 'vec3 effect(vec2 uv, vec2 p, float t){return vec3(1.);}', p1Label: 'a', p2Label: 'b' };
+  const sceneWithCustom = { id: 's1', name: 'x', surfaces: [{ ...defaultSurface('a'), effect: 'custom', custom }] };
+  const next = applyScene(st, sceneWithCustom, 'content');
+  assert.equal(next.surfaces[0].effect, 'custom');
+  assert.deepEqual(next.surfaces[0].custom, custom);
+  const back = applyScene(next, PRESET_SCENES[0], 'content');
+  assert.equal(back.surfaces[0].effect, PRESET_SCENES[0].surfaces[0].effect);
+  assert.equal(back.surfaces[0].custom, undefined);
+});
+
+test('sanitizeCustomEffect validates input', async () => {
+  const { sanitizeCustomEffect, CUSTOM_GLSL_MAX } = await import('../public/js/core/catalog.js');
+  assert.equal(sanitizeCustomEffect(null), null);
+  assert.equal(sanitizeCustomEffect({ glsl: '   ' }), null);
+  assert.equal(sanitizeCustomEffect({ glsl: 'x'.repeat(CUSTOM_GLSL_MAX + 1) }), null);
+  const e = sanitizeCustomEffect({ id: '../evil', name: 'n', glsl: 'vec3 effect(vec2 a, vec2 b, float t){return vec3(0.);}', colors: ['#fff'] });
+  assert.match(e.id, /^fx_/);
+  assert.equal(e.colors, null);
+});
+
+test('shader error lines map to the user code', async () => {
+  const { COMMON, parseShaderErrors } = await import('../public/js/engine/effects-glsl.js');
+  const glsl = 'vec3 effect(vec2 uv, vec2 p, float t) {\n  return vec3(oops);\n}';
+  const base = COMMON.split('\n').length - 1;
+  const errs = parseShaderErrors(`ERROR: 0:${base + 2}: 'oops' : undeclared identifier\nERROR: 0:${base + 9}: 'effect' : no matching overloaded function found`, glsl);
+  assert.equal(errs[0].line, 2);
+  assert.match(errs[0].message, /oops/);
+  assert.equal(errs[1].line, null);
+});

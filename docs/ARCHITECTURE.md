@@ -73,7 +73,18 @@ Auto quality lowers the internal resolution if the display can't hold ~45 fps an
 | controller | `cmd {displayId, cmd, value}` | `identify`, `reload`, `guides`, `info` |
 | controller | `rename`, `forget`, `playlist` | display management |
 
-## Adding an effect
+## Writing effects in the app (no code checkout)
+
+The **Create** tab is a live GLSL editor: write `effect()`, it compiles as you type (errors are mapped to your own
+line numbers), and the last version that compiled is shown on the preview and, after a clean preview frame, on the
+display. Effects are saved to `data/effects/*.json` (`/api/effects`) and can be exported / imported as
+`*.lpfx.json` files to share with others.
+
+A surface using a custom effect stores `effect: 'custom'` and `custom: { id, name, glsl, p1Label, p2Label }`, so the
+shader travels with display state, scenes and playlists — displays never fetch the library. Displays report compile
+failures back in their `stats` message (`shaderErrors`) and keep rendering the last working shader.
+
+## Adding a built-in effect
 
 1. Add GLSL in `public/js/engine/effects-glsl.js`:
    ```glsl
@@ -81,7 +92,7 @@ Auto quality lowers the internal resolution if the display can't hold ~45 fps an
    ```
    Helpers: `noise`, `fbm`, `hash21`, `hash22`, `pal(t)` (3-colour palette), `bass()`, `level()`, uniforms `uP1`, `uP2`.
 2. Add metadata in `public/js/core/catalog.js` (`EFFECTS`): names (es/en), category, palette, labels for p1/p2.
-3. `npm test` checks the two lists match. Thumbnails are generated automatically (bump `KEY` in `thumbs.js`).
+3. `npm test` checks the two lists match. The thumbnail is generated automatically the first time the controller loads.
 
 ## Adding a particle system
 

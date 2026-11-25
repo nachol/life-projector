@@ -1,11 +1,12 @@
 // Minimal WebGL2 helpers.
 
 export class Program {
-  constructor(gl, vsSrc, fsSrc, tfVaryings = null, label = 'program') {
+  constructor(gl, vsSrc, fsSrc, tfVaryings = null, label = 'program', { quiet = false } = {}) {
     this.gl = gl;
     this.label = label;
-    const vs = compile(gl, gl.VERTEX_SHADER, vsSrc, label);
-    const fs = compile(gl, gl.FRAGMENT_SHADER, fsSrc, label);
+    const vs = compile(gl, gl.VERTEX_SHADER, vsSrc, label, quiet);
+    let fs;
+    try { fs = compile(gl, gl.FRAGMENT_SHADER, fsSrc, label, quiet); } catch (e) { gl.deleteShader(vs); throw e; }
     const p = gl.createProgram();
     gl.attachShader(p, vs);
     gl.attachShader(p, fs);
@@ -15,7 +16,12 @@ export class Program {
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
       const log = gl.getProgramInfoLog(p);
-      throw new Error(`[${label}] link error: ${log}`);
+      gl.deleteProgram(p);
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
+      const err = new Error(`[${label}] link error: ${log}`);
+      err.log = log;
+      throw err;
     }
     gl.deleteShader(vs);
     gl.deleteShader(fs);
@@ -38,16 +44,17 @@ export class Program {
   dispose() { this.gl.deleteProgram(this.p); }
 }
 
-function compile(gl, type, src, label) {
+function compile(gl, type, src, label, quiet = false) {
   const s = gl.createShader(type);
   gl.shaderSource(s, src);
   gl.compileShader(s);
   if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
     const log = gl.getShaderInfoLog(s);
     gl.deleteShader(s);
-    const numbered = src.split('\n').map((l, i) => `${String(i + 1).padStart(4)}: ${l}`).join('\n');
-    console.error(numbered);
-    throw new Error(`[${label}] ${type === gl.VERTEX_SHADER ? 'vertex' : 'fragment'} compile error: ${log}`);
+    if (!quiet) console.error(src.split('\n').map((l, i) => `${String(i + 1).padStart(4)}: ${l}`).join('\n'));
+    const err = new Error(`[${label}] ${type === gl.VERTEX_SHADER ? 'vertex' : 'fragment'} compile error: ${log}`);
+    err.log = log;
+    throw err;
   }
   return s;
 }

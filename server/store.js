@@ -23,10 +23,11 @@ export class Store {
     this.paths = {
       displays: path.join(dir, 'displays'),
       scenes: path.join(dir, 'scenes'),
+      effects: path.join(dir, 'effects'),
       media: path.join(dir, 'media'),
       registry: path.join(dir, 'registry.json'),
     };
-    for (const p of [dir, this.paths.displays, this.paths.scenes, this.paths.media]) fs.mkdirSync(p, { recursive: true });
+    for (const p of [dir, this.paths.displays, this.paths.scenes, this.paths.effects, this.paths.media]) fs.mkdirSync(p, { recursive: true });
     this.pending = new Map();
     this.registry = this.#read(this.paths.registry, { displays: {}, playlists: {} });
     this.registry.displays ||= {};
@@ -110,6 +111,23 @@ export class Store {
     return data;
   }
   async deleteScene(id) { await fsp.rm(path.join(this.paths.scenes, `${id}.json`), { force: true }); }
+
+  // ---- custom effects (user-written shaders) ----
+  async listEffects() {
+    const files = (await fsp.readdir(this.paths.effects)).filter((f) => f.endsWith('.json'));
+    const out = [];
+    for (const f of files) {
+      const e = this.#read(path.join(this.paths.effects, f), null);
+      if (e) out.push(e);
+    }
+    return out.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  }
+  saveEffect(id, effect) {
+    const data = { ...effect, id, updatedAt: Date.now() };
+    this.#writeNow(path.join(this.paths.effects, `${id}.json`), data);
+    return data;
+  }
+  async deleteEffect(id) { await fsp.rm(path.join(this.paths.effects, `${id}.json`), { force: true }); }
 
   // ---- media ----
   async listMedia() {

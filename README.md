@@ -36,6 +36,7 @@ Es nuestro aporte a la comunidad que usa proyectores para crear ambientes. Clón
 | 🎵 **Audio reactivo** | Pulso automático por BPM (con *tap tempo*), micrófono del celular transmitido a la pantalla, o micrófono de la propia pantalla. |
 | 🌙 **Ambientes listos** | 14 escenas: Noche de aurora, Galaxia, Bosque encantado, Fondo del mar, Fogata, Nevada, Tormenta, Fiesta neón, Zen, Lámpara de lava, Caos hipnótico, Seda fluida, Cueva de cristal, Mandala. Guarda las tuyas. |
 | ⟳ **Programación** | Rota escenas automáticamente cada N minutos. Lo hace el servidor, así que funciona aunque cierres el celular. |
+| ✍️ **Crea tus efectos** | Pestaña **Crear**: editor GLSL en vivo con plantillas, errores marcados por línea y vista previa al instante. Guarda en tu biblioteca y comparte como archivo `.lpfx.json`. |
 | 🖼 **Imágenes y video** | Sube tus archivos y mapéalos sobre cualquier superficie. |
 | 📡 **Multi-pantalla** | Controla varios proyectores a la vez; cada uno guarda su propia calibración. Aplica una escena a todos con un toque. |
 | 📱 **Control desde el celular** | Interfaz responsive (PWA instalable), en español e inglés. Las guías de calibración se ven en la pared mientras arrastras en el celular. |
@@ -115,7 +116,7 @@ La pantalla renderiza todo localmente en su GPU; por la red solo viaja el estado
 
 ### 🤝 Contribuir
 
-¡Nuevos efectos, sistemas de partículas, traducciones y mejoras son bienvenidos! Añadir un efecto es escribir una función GLSL. Lee [CONTRIBUTING.md](CONTRIBUTING.md).
+¡Nuevos efectos, sistemas de partículas, traducciones y mejoras son bienvenidos! Puedes crear efectos desde la pestaña **Crear** sin tocar el código, y compartir el `.lpfx.json`; o sumarlos al repo como efectos incluidos. Lee [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -129,6 +130,7 @@ Life Projector is a web app that turns any projector, TV or Google TV into a can
 - **Multi-surface corner-pin mapping** with true perspective (homography), soft edges, opacity and additive blending.
 - **Protection zones**: feathered polygons that block light (eyes, windows, screens) or restrict projection to a shape.
 - **Optics**: 4-corner keystone, mirror / flip (rear & ceiling mount), brightness, contrast, gamma, saturation, colour temperature, vignette, **edge blending** for multi-projector setups, test patterns.
+- **Create your own effects** in the app: live GLSL editor with templates, per-line errors and instant preview; save to your library and share as `.lpfx.json` files.
 - **Audio reactive**: auto BPM pulse with tap tempo, phone microphone streamed to the display, or the display's own microphone.
 - **14 built-in ambiences**, saved scenes, **server-side scene rotation** (keeps running with your phone off), image & video upload.
 - **Multi-display**: every projector keeps its own calibration; apply a scene to all of them at once.

@@ -7,6 +7,7 @@ import { Handles } from './handles.js';
 import { renderPanel, fillThumb } from './panels.js';
 import { h, toast } from './ui.js';
 import { generateThumbs, onThumbs } from './thumbs.js';
+import { EffectEditor } from './editor.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -42,6 +43,7 @@ try {
   $('preview-empty').classList.add('show');
 }
 const handles = new Handles(app, $('handles'));
+app.renderer = renderer;
 
 function currentDisplay() { return app.displays.find((d) => d.id === app.displayId) || null; }
 
@@ -107,7 +109,8 @@ conn.on('stats', (m) => {
   const d = app.displays.find((x) => x.id === m.displayId);
   if (d) {
     const resized = d.w !== m.w || d.h !== m.h;
-    Object.assign(d, { fps: m.fps, w: m.w, h: m.h, online: true });
+    Object.assign(d, { fps: m.fps, w: m.w, h: m.h, online: true, shaderErrors: m.shaderErrors || [] });
+    if (m.displayId === app.displayId && app.tab === 'create') app.editor.renderDisplayErrors();
     if (m.displayId === app.displayId) { updatePill(); if (resized) fitPreview(); }
   }
 });
@@ -256,14 +259,15 @@ $('opt-live').addEventListener('change', () => {
 });
 
 // ---------------------------------------------------------------- top bar / tabs
-document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', () => {
-  app.tab = b.dataset.tab;
+app.setTab = (tab) => {
+  app.tab = tab;
   localStorage.setItem('lp.tab', app.tab);
   app.sel.point = null;
   renderPanels();
   handles.schedule();
   sendGuides();
-}));
+};
+document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', () => app.setTab(b.dataset.tab)));
 
 $('master').addEventListener('input', (e) => app.commit((s) => { s.master.brightness = parseFloat(e.target.value); }, { panels: false }));
 $('btn-blackout').addEventListener('click', () => {
@@ -385,10 +389,14 @@ $('btn-cast').addEventListener('click', async () => {
 });
 if (!('PresentationRequest' in window)) $('btn-cast').title = 'Chrome only';
 
+// ---------------------------------------------------------------- effect editor
+app.editor = new EffectEditor(app);
+app.onLibrary = () => { if (app.tab === 'effect') renderPanels(); };
+
 // ---------------------------------------------------------------- boot
 (async () => {
   try { app.info = await api('/api/info'); } catch {}
-  await Promise.all([app.refreshScenes(), app.refreshMedia()]);
+  await Promise.all([app.refreshScenes(), app.refreshMedia(), app.editor.refreshLibrary()]);
   fitPreview();
   renderPanels();
   generateThumbs();

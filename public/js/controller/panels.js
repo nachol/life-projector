@@ -2,7 +2,7 @@ import { h, slider, select, checkbox, toast } from './ui.js';
 import { t, lang } from '../core/i18n.js';
 import {
   EFFECTS, PARTICLES, PALETTES, localized, defaultSurface, defaultEffectParams, defaultParticles,
-  defaultMask, defaultOutput, uid, sceneFromState,
+  defaultMask, defaultOutput, uid, sceneFromState, customForSurface,
 } from '../core/catalog.js';
 import { thumb } from './thumbs.js';
 import { api } from '../core/net.js';
@@ -10,6 +10,8 @@ import { api } from '../core/net.js';
 const L = (v) => localized(v, lang);
 
 export function renderPanel(app, body) {
+  // The editor is re-attached, never rebuilt: emptying the body first would steal focus mid-typing.
+  if (app.tab === 'create' && app.state) { app.editor.show(body); return; }
   body.replaceChildren();
   if (!app.state) {
     body.append(h('p', { class: 'muted' }, t('select_display')));
@@ -88,7 +90,9 @@ function scenes(app) {
 function effect(app) {
   const sf = selectedSurface(app);
   if (!sf) return h('p', { class: 'muted' }, '—');
-  const fx = EFFECTS[sf.effect] || EFFECTS.none;
+  const fx = sf.effect === 'custom'
+    ? { name: sf.custom?.name || 'Custom', p1: { label: sf.custom?.p1Label || 'P1' }, p2: { label: sf.custom?.p2Label || 'P2' } }
+    : EFFECTS[sf.effect] || EFFECTS.none;
   const set = (fn, opts) => app.commit((st) => { const s = st.surfaces.find((x) => x.id === sf.id); if (s) fn(s); }, opts);
   const cats = ['all', 'ambient', 'nature', 'party', 'geometric', 'utility'];
   const cat = app.effectCat || 'all';
@@ -108,11 +112,22 @@ function effect(app) {
       onclick: () => set((s) => {
         const keepColors = s.params?.colors;
         s.effect = id;
+        delete s.custom;
         s.params = { ...defaultEffectParams(id), speed: s.params?.speed ?? 0.5, audio: s.params?.audio ?? 0.5 };
         if (app.keepPalette && keepColors) s.params.colors = keepColors;
       }),
     }, thumbEl(`fx:${id}`), h('span', { class: 'label' }, L(e.name)));
   })));
+  const library = app.editor?.library || [];
+  if (library.length && (cat === 'all' || cat === 'custom')) {
+    out.push(h('h3', {}, t('my_effects')), h('div', { class: 'gallery' }, library.map((c) => h('button', {
+      type: 'button', class: `card${sf.effect === 'custom' && sf.custom?.id === c.id ? ' active' : ''}`,
+      onclick: () => set((s) => { s.effect = 'custom'; s.custom = customForSurface(c); }),
+    },
+    /^data:image\/(jpeg|png);base64,/.test(c.thumb || '') ? h('img', { src: c.thumb, alt: '' }) : h('div', { class: 'ph' }),
+    h('span', { class: 'label' }, c.name)))));
+  }
+  out.push(h('button', { type: 'button', class: 'btn small', style: { marginTop: '8px' }, onclick: () => { app.setTab('create'); } }, '✎ ' + t('create') + '…'));
   out.push(checkbox(lang === 'es' ? 'Mantener paleta al cambiar efecto' : 'Keep palette when switching', !!app.keepPalette, (v) => { app.keepPalette = v; }));
 
   if (sf.effect === 'media') out.push(...mediaControls(app, sf, set));
@@ -231,7 +246,7 @@ function surfaces(app) {
   const list = h('div', { class: 'list' }, st.surfaces.map((s, i) => h('div', { class: `item${s.id === sf?.id ? ' active' : ''}` },
     h('input', { type: 'checkbox', checked: s.visible !== false, title: t('visible'), onchange: (e) => app.commit((x) => { x.surfaces[i].visible = e.target.checked; }) }),
     h('span', { class: 'name', onclick: () => app.select({ surface: s.id, point: null }) }, `${i + 1}. ${s.name}`),
-    h('span', { class: 'meta' }, L(EFFECTS[s.effect]?.name)),
+    h('span', { class: 'meta' }, s.effect === 'custom' ? s.custom?.name : L(EFFECTS[s.effect]?.name)),
     h('button', { type: 'button', class: 'mini', title: '↑', disabled: i === 0, onclick: () => app.commit((x) => { const [a] = x.surfaces.splice(i, 1); x.surfaces.splice(i - 1, 0, a); }) }, '↑'),
     h('button', { type: 'button', class: 'mini', title: '↓', disabled: i === st.surfaces.length - 1, onclick: () => app.commit((x) => { const [a] = x.surfaces.splice(i, 1); x.surfaces.splice(i + 1, 0, a); }) }, '↓'),
   )));

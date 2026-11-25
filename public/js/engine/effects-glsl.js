@@ -397,3 +397,36 @@ void main() {
   if (uv.x >= 0. && uv.x <= 1. && uv.y >= 0. && uv.y <= 1.) col = texture(uTex, vec2(uv.x, 1. - uv.y)).rgb;
   outColor = vec4(hueShift(col, uHue) * uIntensity, 1.);
 }`;
+
+// ---------- user-written effects ----------
+const COMMON_OFFSET = COMMON.split('\n').length - 1; // lines before the user's first line
+
+export function customFragmentSource(glsl) {
+  return COMMON + String(glsl) + '\n' + MAIN;
+}
+
+/**
+ * Convert a WebGL shader info log into errors relative to the user's code.
+ * Errors that fall after the user's last line are in our main(): usually a missing
+ * effect() function or unbalanced braces.
+ */
+export function parseShaderErrors(log, glsl) {
+  const userLines = String(glsl).split('\n').length;
+  const out = [];
+  for (const raw of String(log || '').split('\n')) {
+    const m = raw.match(/ERROR:\s*\d+:(\d+):\s*(.*)$/);
+    if (!m) continue;
+    const line = Number(m[1]) - COMMON_OFFSET;
+    if (line >= 1 && line <= userLines) out.push({ line, message: m[2].trim() });
+    else out.push({ line: null, message: `${m[2].trim()} — ¿falta la función effect() o hay llaves sin cerrar? / missing effect() or unbalanced braces?` });
+  }
+  if (!out.length && log) out.push({ line: null, message: String(log).trim().slice(0, 300) });
+  return out;
+}
+
+/** Small stable hash used to cache compiled custom programs. */
+export function hashString(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36);
+}
