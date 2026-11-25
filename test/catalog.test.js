@@ -82,3 +82,18 @@ test('shader error lines map to the user code', async () => {
   assert.match(errs[0].message, /oops/);
   assert.equal(errs[1].line, null);
 });
+
+test('pre-frame media state gets frame / art defaults', async () => {
+  const { normalizeMedia } = await import('../public/js/core/catalog.js');
+  const old = normalizeState({ surfaces: [{ id: 'x', effect: 'media', media: { url: '/media/a.jpg', type: 'image', fit: 'contain' } }] });
+  const m = old.surfaces[0].media;
+  assert.equal(m.url, '/media/a.jpg');
+  assert.equal(m.fit, 'contain');
+  assert.equal(m.frame.style, 'none');
+  assert.equal(m.art.style, 'none');
+  assert.equal(typeof m.frame.width, 'number');
+  const partial = normalizeMedia({ frame: { style: 'gold' }, art: { style: 'bogus' } });
+  assert.equal(partial.frame.style, 'gold');
+  assert.equal(typeof partial.frame.mat, 'number');
+  assert.equal(partial.art.style, 'none');
+});

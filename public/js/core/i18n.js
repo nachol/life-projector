@@ -36,6 +36,11 @@ const DICT = {
     save_library: 'Guardar en mis efectos', export: 'Exportar', import: 'Importar', apply: 'Aplicar', edit: 'Editar',
     line: 'Línea', display_error: 'La pantalla no pudo compilar', editor_help: 'Referencia rápida',
     import_invalid: 'Archivo no válido', effect_saved: 'Efecto guardado',
+    frame: 'Marco', frame_width: 'Grosor del marco', canvas_depth: 'Profundidad del lienzo', frame_color: 'Color del marco',
+    mat_width: 'Paspartú (borde interior)', mat_color: 'Color del paspartú',
+    frame_hint: 'El proyector solo suma luz: los marcos se ven más reales sobre paredes claras. Los tonos muy oscuros se ven como "sin luz".',
+    art_style: 'Estilo artístico', art_amount: 'Intensidad del estilo', paint_in: 'Animación: se pinta sola',
+    paint_seconds: 'Duración', paint_loop: 'Repetir', paint_replay: 'Volver a pintar',
   },
   en: {
     app_tagline: 'Projection mapping & ambient visuals',
@@ -74,6 +79,11 @@ const DICT = {
     save_library: 'Save to my effects', export: 'Export', import: 'Import', apply: 'Apply', edit: 'Edit',
     line: 'Line', display_error: 'The display could not compile', editor_help: 'Quick reference',
     import_invalid: 'Invalid file', effect_saved: 'Effect saved',
+    frame: 'Frame', frame_width: 'Frame width', canvas_depth: 'Canvas depth', frame_color: 'Frame colour',
+    mat_width: 'Mat (inner border)', mat_color: 'Mat colour',
+    frame_hint: 'A projector only adds light: frames look most real on light walls. Very dark tones show as "no light".',
+    art_style: 'Artistic style', art_amount: 'Style strength', paint_in: 'Animation: paints itself',
+    paint_seconds: 'Duration', paint_loop: 'Repeat', paint_replay: 'Paint again',
   },
 };
 

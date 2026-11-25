@@ -59,6 +59,25 @@ so calibrating once is enough.
 
 Auto quality lowers the internal resolution if the display can't hold ~45 fps and raises it back when it can.
 
+## Photos: frames and painterly styles
+
+A surface with `effect: 'media'` shows an uploaded image or video. `media.frame` and `media.art` add:
+
+- **Decoding**: images are decoded with `createImageBitmap(…, { imageOrientation: 'from-image' })`, so phone photos keep
+  their EXIF rotation, and shrunk to fit `MAX_TEXTURE_SIZE` (capped at 4096). Mipmaps avoid shimmer when a large
+  photo is shown small. Browsers without those options fall back to a plain `<img>`.
+- **Stylise pass** (`ART_FS`): oil (Kuwahara with a fixed 81-tap kernel whose spacing grows with the brush size, so
+  a slow TV GPU can't time out), watercolour, pencil and pointillism. For a still image it runs **once** into a cached
+  target, keyed by url, style, strength and size; for video it runs every frame at a lower resolution.
+- **Photo pass** (`MEDIA_FS`): fit, frame, mat (passe-partout), canvas weave and the "paints itself" reveal. Frame
+  and mat widths are fractions of the surface's shorter side, computed from the surface's **true** aspect (`uAspect`),
+  not the render target's, which is only reallocated on >12% size changes. That keeps the frame equally thick on
+  every side while you drag corners.
+- **Paint-in**: its own real-time clock per surface, restarted when the photo or style changes or when `art.paintRun`
+  is incremented (the "Paint again" button), so preview and projector replay together.
+
+Old states and scenes without these fields are completed by `normalizeMedia()`.
+
 ## Protocol (WebSocket `/ws`, JSON)
 
 | From | Message | Meaning |
